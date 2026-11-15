@@ -200,6 +200,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .orow:first-of-type{border-top:0}
 .count.alert{background:var(--bad);color:var(--surface)}
 .panel.inbox{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-soft)}
+.panel.todo{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .steps{margin:8px 0 0;padding-left:20px}
 .steps li{margin:4px 0}
 
@@ -1195,6 +1196,12 @@ for (const s of SETS) SECTIONS.push({ key: 'set:' + s.code, group: 'Inserts', la
 
 /* ===================== Pure logic ===================== */
 const OFFER_ST = ['open', 'cancelled', 'done', 'declined'];
+let RES = new Map();
+function resFor(id){
+  if (!id || String(id).startsWith('demo') || id === 'local') return { out: {}, in: {} };
+  if (!RES.has(id)) RES.set(id, reservationsFor(id));
+  return RES.get(id);
+}
 function cnt(p, id){
   const v = p && p.counts ? p.counts[id] : 0;
   return typeof v === 'number' && v > 0 ? Math.min(99, Math.floor(v)) : 0;
@@ -1273,10 +1280,11 @@ function applyToCounts(counts, items, mode){
 /* What I can get from friend f, and give to f. */
 function computeMatch(me, f){
   const get = [], give = [];
+  const rm = resFor(me.id), rf = resFor(f.id);
   for (const c of ALL){
     const mine = cnt(me, c.id), theirs = cnt(f, c.id);
-    if (theirs > 1 && mine === 0 && inScope(me, c)) get.push(c);
-    if (f.complete && mine > 1 && theirs === 0 && inScope(f, c)) give.push(c);
+    if (theirs - 1 - (rf.out[c.id] || 0) > 0 && mine === 0 && !rm.in[c.id] && inScope(me, c)) get.push(c);
+    if (f.complete && mine - 1 - (rm.out[c.id] || 0) > 0 && theirs === 0 && !rf.in[c.id] && inScope(f, c)) give.push(c);
   }
   return { f, get, give, score: f.complete ? Math.min(get.length, give.length) : 0 };
 }
@@ -1298,30 +1306,55 @@ function stats(p){
    The recipient answers in THEIR own doc (replies[offerId]) and updates their own counts in the same write.
    The sender's app then settles the offer once, applying the swap to the sender's counts.
    Everyone only ever writes their own doc. */
-function promisedSpares(p){
-  const m = {};
-  for (const o of p.offers || []) if (o.st === 'open') for (const id of o.give) m[id] = (m[id] || 0) + 1;
-  return m;
+function replyOf(p, oid){ return p && p.replies ? (p.replies[oid] || null) : null; }
+function isAgreed(r){ return !!(r && r.s === 'accepted' && r.v === 2); }
+function applyHandover(d, gave, got){
+  for (const id of gave){ const v = (d.counts[id] || 0) - 1; if (v > 0) d.counts[id] = v; else delete d.counts[id]; }
+  for (const id of got) d.counts[id] = Math.min(99, (d.counts[id] || 0) + 1);
 }
-function acceptInto(d, o){
-  for (const id of o.give) d.counts[id] = Math.min(99, (d.counts[id] || 0) + 1);
-  for (const id of o.get){ const v = (d.counts[id] || 0) - 1; if (v > 0) d.counts[id] = v; else delete d.counts[id]; }
-}
-function settleOffers(d, lookup){
+/* Sender side: react to the recipient's reply. Agreed swaps change no cards until someone marks them done. */
+function settleSent(d, lookup){
   const notes = [];
   for (const o of d.offers || []){
     if (o.st !== 'open' && o.st !== 'cancelled') continue;
-    const rec = lookup(o.to);
-    const r = rec && rec.replies ? rec.replies[o.id] : null;
+    const rec = lookup(o.to); const r = replyOf(rec, o.id);
     if (!r) continue;
-    if (r.s === 'accepted'){
-      for (const id of o.give){ const v = (d.counts[id] || 0) - 1; if (v > 0) d.counts[id] = v; else delete d.counts[id]; }
-      for (const id of o.get) d.counts[id] = Math.min(99, (d.counts[id] || 0) + 1);
-      notes.push({ kind: 'accepted', nick: rec.nick, id: o.id });
-      o.st = 'done';
-    } else if (o.st === 'open'){
-      notes.push({ kind: 'declined', nick: rec.nick, id: o.id });
-      o.st = 'declined';
+    const nick = rec.nick;
+    if (r.s === 'accepted' && r.v !== 2){
+      applyHandover(d, o.give, o.get); o.st = 'done'; o.done = { gave: o.give.slice(), got: o.get.slice(), at: Date.now() };
+      notes.push({ kind: 'done', nick, id: o.id });
+    } else if (o.st !== 'open'){
+      continue;
+    } else if (r.s === 'declined'){
+      o.st = 'declined'; notes.push({ kind: 'declined', nick, id: o.id });
+    } else if (r.s === 'cancelled'){
+      o.st = 'cancelled'; notes.push({ kind: 'calledoff', nick, id: o.id });
+    } else if (isAgreed(r) && r.done){
+      const gave = (r.done.got || []).filter(id => o.give.includes(id)), got = (r.done.gave || []).filter(id => o.get.includes(id));
+      applyHandover(d, gave, got); o.st = 'done'; o.done = { gave, got, at: Date.now() };
+      notes.push({ kind: 'done', nick, id: o.id });
+    }
+  }
+  return notes;
+}
+/* Recipient side: react to the sender marking an agreed swap done, or calling it off. */
+function settleReceived(d, myId, players){
+  const notes = [];
+  for (const [oid, r] of Object.entries(d.replies || {})){
+    if (!isAgreed(r) || r.done) continue;
+    let sender = null, o = null;
+    for (const p of players){
+      if (p.id === myId) continue;
+      const x = (p.offers || []).find(z => z.id === oid && z.to === myId);
+      if (x){ sender = p; o = x; break; }
+    }
+    if (!o) continue;
+    if (o.st === 'cancelled'){
+      r.s = 'cancelled'; notes.push({ kind: 'calledoff', nick: sender.nick, id: oid });
+    } else if (o.st === 'done' && o.done){
+      const gave = (o.done.got || []).filter(id => o.get.includes(id)), got = (o.done.gave || []).filter(id => o.give.includes(id));
+      applyHandover(d, gave, got); r.done = { gave, got, at: Date.now() };
+      notes.push({ kind: 'done', nick: sender.nick, id: oid });
     }
   }
   return notes;
@@ -1343,7 +1376,7 @@ const S = {
   players: {}, local: {}, dirty: new Set(), saving: new Set(), again: new Set(),
   activeId: null, demo: false, demoPlayers: [],
   tab: 'cards', addMode: 'pad', mode: 'swap', section: 'base', filter: 'all', query: '',
-  padSet: 'base', padBuf: '', padLog: [], undo: null, onboardAsked: false, expanded: new Set(), seenIncoming: null,
+  padSet: 'base', padBuf: '', padLog: [], undo: null, onboardAsked: false, expanded: new Set(), seenIncoming: null, seenAgreed: null,
   platform: 'none', fb: null, authUser: null, adminUid: null, unsub: null, welcomeOpen: false
 };
 const isWeb = () => S.platform === 'firebase';
@@ -1404,21 +1437,37 @@ function cleanOffers(a){
     to: String(o.to || '').slice(0, 80),
     give: cleanIds(o.give), get: cleanIds(o.get),
     at: Number(o.at) || 0,
-    st: OFFER_ST.includes(o.st) ? o.st : 'open'
+    st: OFFER_ST.includes(o.st) ? o.st : 'open',
+    ...(cleanDone(o.done) ? { done: cleanDone(o.done) } : {})
   } : null).filter(o => o && o.id && o.to && (o.give.length || o.get.length));
 }
+function cleanDone(x){ return x && typeof x === 'object' ? { gave: cleanIds(x.gave), got: cleanIds(x.got), at: Number(x.at) || 0 } : null; }
 function cleanReplies(r){
   const out = {};
   if (r && typeof r === 'object') for (const [k, v] of Object.entries(r)){
-    if (/^[a-z0-9]{1,24}$/i.test(k) && v && (v.s === 'accepted' || v.s === 'declined')) out[k] = { s: v.s, at: Number(v.at) || 0 };
+    if (/^[a-z0-9]{1,24}$/i.test(k) && v && ['accepted', 'declined', 'cancelled'].includes(v.s)){
+      const o = { s: v.s, at: Number(v.at) || 0 };
+      if (v.v === 2) o.v = 2;
+      const dn = cleanDone(v.done); if (dn) o.done = dn;
+      out[k] = o;
+    }
   }
   return out;
 }
 function toStore(d){
   return {
     v: 1, adult: d.adult, child: d.child || '', nick: d.nick, counts: { ...d.counts }, complete: !!d.complete, scope: [...d.scope], other: d.other || '', managed: !!d.managed, updatedAt: d.updatedAt || 0,
-    offers: (d.offers || []).map(o => ({ id: o.id, to: o.to, give: [...o.give], get: [...o.get], at: o.at, st: o.st })),
-    replies: Object.fromEntries(Object.entries(d.replies || {}).map(([k, v]) => [k, { s: v.s, at: v.at }]))
+    offers: (d.offers || []).map(o => {
+      const x = { id: o.id, to: o.to, give: [...o.give], get: [...o.get], at: o.at, st: o.st };
+      if (o.done) x.done = { gave: [...o.done.gave], got: [...o.done.got], at: o.done.at || 0 };
+      return x;
+    }),
+    replies: Object.fromEntries(Object.entries(d.replies || {}).map(([k, v]) => {
+      const x = { s: v.s, at: v.at || 0 };
+      if (v.v === 2) x.v = 2;
+      if (v.done) x.done = { gave: [...v.done.gave], got: [...v.done.got], at: v.done.at || 0 };
+      return [k, x];
+    }))
   };
 }
 function newDoc(id, adult, child){ return setNames({ id, counts: {}, complete: false, scope: ['base'], other: '', managed: false, updatedAt: 0, offers: [], replies: {} }, adult || 'Friend', child); }
@@ -1464,7 +1513,39 @@ function outgoingFor(pid){
   const cutoff = Date.now() - 3 * 86400e3;
   return (me.offers || []).filter(o => o.st === 'open' || o.at > cutoff)
     .map(o => { const to = getDoc(o.to); return { o, to, reply: to && to.replies ? to.replies[o.id] || null : null }; })
+    .filter(x => !(x.o.st === 'open' && isAgreed(x.reply) && !x.reply.done))
     .sort((a, b) => b.o.at - a.o.at);
+}
+function pendingFor(pid){
+  const me = getDoc(pid); if (!me) return [];
+  const out = [];
+  for (const o of me.offers || []){
+    if (o.st !== 'open') continue;
+    const other = getDoc(o.to); const r = replyOf(other, o.id);
+    if (isAgreed(r) && !r.done) out.push({ id: o.id, role: 'sender', other, otherId: o.to, give: o.give, get: o.get, at: r.at || o.at });
+  }
+  for (const [oid, r] of Object.entries(me.replies || {})){
+    if (!isAgreed(r) || r.done) continue;
+    for (const p of allPlayers()){
+      if (p.id === pid || p.demo) continue;
+      const o = (p.offers || []).find(z => z.id === oid && z.to === pid);
+      if (o && o.st === 'open'){ out.push({ id: oid, role: 'recipient', other: p, otherId: p.id, give: o.get, get: o.give, at: r.at || o.at }); break; }
+    }
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+function reservationsFor(pid){
+  const out = {}, inn = {};
+  const me = getDoc(pid); if (!me) return { out, in: inn };
+  const add = (m, ids) => { for (const id of ids) m[id] = (m[id] || 0) + 1; };
+  for (const o of me.offers || []){
+    if (o.st !== 'open') continue;
+    const r = replyOf(getDoc(o.to), o.id);
+    if (r && (r.s === 'declined' || r.s === 'cancelled' || r.done)) continue;
+    add(out, o.give); add(inn, o.get);
+  }
+  for (const x of pendingFor(pid)) if (x.role === 'recipient'){ add(out, x.give); add(inn, x.get); }
+  return { out, in: inn };
 }
 function openOfferTo(pid, fid){ const me = getDoc(pid); return ((me && me.offers) || []).find(o => o.to === fid && o.st === 'open') || null; }
 function myProfiles(){
@@ -1524,36 +1605,44 @@ function scheduleSettle(){ clearTimeout(settleTimer); settleTimer = setTimeout(r
 function runSettle(){
   if (!S.db || !S.loaded || document.visibilityState === 'hidden') return;
   const notes = [];
+  const players = allPlayers().filter(p => !p.demo);
   for (const pid of myProfiles()){
     const server = S.players[pid]; if (!server) continue;
-    const pending = (server.offers || []).some(o => {
-      if (o.st !== 'open' && o.st !== 'cancelled') return false;
-      const rec = getDoc(o.to); const r = rec && rec.replies ? rec.replies[o.id] : null;
-      return !!r && (o.st === 'open' || r.s === 'accepted');
-    });
-    if (!pending) continue;
+    const probe = JSON.parse(JSON.stringify(server));
+    if (settleSent(probe, getDoc).length + settleReceived(probe, pid, players).length === 0) continue;
     if (S.dirty.has(pid) || S.saving.has(pid)){ scheduleSettle(); continue; }
     const d = mutable(pid);
-    const ns = settleOffers(d, getDoc);
+    const ns = settleSent(d, getDoc).concat(settleReceived(d, pid, players));
     if (ns.length){ S.dirty.add(pid); flush(pid); for (const n of ns) notes.push({ ...n, pid }); }
   }
   if (!notes.length) return;
   renderAll();
-  if (notes.length > 1) toast(`${notes.length} swap offers answered. Cards updated.`);
+  if (notes.length > 1) toast(`${notes.length} swaps updated. Check the Swaps tab.`);
   else {
     const n = notes[0];
     const whose = n.pid === S.uid ? 'your' : `${getDoc(n.pid).nick}'s`;
-    toast(n.kind === 'accepted' ? `${n.nick} accepted ${whose} swap offer. Cards updated.` : `${n.nick} declined ${whose} swap offer.`);
+    toast(n.kind === 'done' ? `${n.nick} marked ${whose} swap as done. Cards updated.`
+      : n.kind === 'calledoff' ? `${n.nick} called off ${whose} swap.`
+      : `${n.nick} declined ${whose} swap offer.`);
   }
 }
 function noticeIncoming(){
-  const ids = new Set();
-  for (const pid of myProfiles()) for (const x of incomingFor(pid)) ids.add(x.o.id);
+  const ids = new Set(), agreed = new Set();
+  for (const pid of myProfiles()){
+    for (const x of incomingFor(pid)) ids.add(x.o.id);
+    for (const x of pendingFor(pid)) if (x.role === 'sender') agreed.add(x.id);
+  }
+  let msg = '';
+  if (S.seenAgreed){
+    const fresh = [...agreed].filter(id => !S.seenAgreed.has(id)).length;
+    if (fresh) msg = fresh === 1 ? "Your swap offer was accepted. It's on your To swap list." : `${fresh} swap offers accepted. They're on your To swap list.`;
+  }
   if (S.seenIncoming){
     const fresh = [...ids].filter(id => !S.seenIncoming.has(id)).length;
-    if (fresh) toast(fresh === 1 ? 'New swap offer. Check the Swaps tab.' : `${fresh} new swap offers. Check the Swaps tab.`);
+    if (fresh) msg = fresh === 1 ? 'New swap offer. Check the Swaps tab.' : `${fresh} new swap offers. Check the Swaps tab.`;
   }
-  S.seenIncoming = ids;
+  if (msg) toast(msg);
+  S.seenIncoming = ids; S.seenAgreed = agreed;
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSettle(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAll(); });
@@ -1694,7 +1783,7 @@ function renderSummary(){
     </div>
     <label class="toggle"><input type="checkbox" id="completeToggle" ${d.complete ? 'checked' : ''} ${canWriteActive() ? '' : 'disabled'}>
       <span><b>Show friends what I need</b><br><small class="muted">Switch on once you've ticked off every card you've got, so swap suggestions are right.</small></span></label>
-    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button></div>`;
+    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button>${pendingFor(S.activeId).length ? `<button type="button" class="btn small primary" id="goToSwap">${plural(pendingFor(S.activeId).length, 'swap')} to hand over</button>` : ''}</div>`;
   renderSaveState();
 }
 function sectionOptions(){
@@ -1887,10 +1976,11 @@ function renderBadges(){
   const friends = me ? friendsOf(S.activeId) : allPlayers().filter(p => p.id !== S.uid);
   const live = me ? rankMatches(me, friends).filter(m => m.score > 0).length : 0;
   const inc = me ? incomingFor(S.activeId).length : 0;
+  const pend = me ? pendingFor(S.activeId).length : 0;
   const badge = $('#swapsCount');
-  badge.textContent = inc ? String(inc) : live ? String(live) : '';
+  badge.textContent = inc ? String(inc) : pend ? String(pend) : live ? String(live) : '';
   badge.classList.toggle('alert', inc > 0);
-  badge.title = inc ? `${plural(inc, 'swap offer')} waiting` : live ? `${plural(live, 'friend')} to swap with` : '';
+  badge.title = inc ? `${plural(inc, 'swap offer')} waiting` : pend ? `${plural(pend, 'swap')} to hand over` : live ? `${plural(live, 'friend')} to swap with` : '';
   $('#friendsCount').textContent = friends.filter(p => !p.demo).length ? String(friends.filter(p => !p.demo).length) : '';
 }
 function renderTabs(){
@@ -1918,7 +2008,7 @@ function renderSwaps(){
   const friends = friendsOf(S.activeId);
   if (!friends.length){
     el.innerHTML = `<div class="panel empty"><h2>No friends here yet</h2>
-      <ol class="steps"><li>Everyone adds their swaps, and ticks off the cards they've got.</li><li>Each person switches on <b>Show friends what I need</b>.</li><li>This tab then lists who to swap with, and which cards.</li><li>Send a swap offer. When your friend accepts, both lists update.</li></ol>
+      <ol class="steps"><li>Everyone adds their swaps, and ticks off the cards they've got.</li><li>Each person switches on <b>Show friends what I need</b>.</li><li>This tab then lists who to swap with, and which cards.</li><li>Send a swap offer. Once it's accepted it goes on your To swap list, and your cards update when you mark it as swapped.</li></ol>
       <div class="sheet-actions"><button type="button" class="btn gold" id="demoOn">Preview with 2 demo friends</button></div>
       <p class="help">Demo friends are only on your screen and are never saved.</p></div>`;
     return;
@@ -1927,6 +2017,8 @@ function renderSwaps(){
   let html = '';
   const inc = incomingFor(S.activeId);
   if (inc.length) html += incomingHTML(me, inc);
+  const pend = pendingFor(S.activeId);
+  if (pend.length) html += toSwapHTML(pend);
   const outg = outgoingFor(S.activeId);
   if (outg.length) html += outgoingHTML(outg);
   if (S.demo) html += `<div class="notice">Showing demo friends. <button type="button" class="btn small" id="demoOff">Hide demo friends</button></div>`;
@@ -1964,16 +2056,30 @@ function renderSwaps(){
 function idChips(ids, cls){ return ids.length ? `<div class="chips">${ids.map(id => cardChip(BY_ID.get(id), cls)).join('')}</div>` : '<small class="muted">Nothing</small>'; }
 function partnerActions(f, m){
   if (f.demo) return `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy swap message</button><small class="muted" style="align-self:center">Demo friend, so offers are off</small>`;
-  const pending = openOfferTo(S.activeId, f.id);
+  const pendOffer = (getDoc(S.activeId).offers || []).find(o => o.to === f.id && o.st === 'open' && !replyOf(f, o.id));
+  const agreed = pendingFor(S.activeId).some(x => x.otherId === f.id);
   const theirs = incomingFor(S.activeId).some(x => x.from.id === f.id);
   const any = m.get.length || m.give.length;
   let html = '';
-  if (theirs && !pending) html += `<span class="pill gold" style="align-self:center">They've sent you an offer, see above</span>`;
-  else if (pending) html += `<span class="pill gold" style="align-self:center">Offer sent · waiting</span><button type="button" class="linkbtn" data-cancel="${esc(pending.id)}">Cancel offer</button>`;
-  else if (any) html += `<button type="button" class="btn small gold" data-offer="${esc(f.id)}">Send swap offer</button>`;
+  if (agreed) html += `<span class="pill" style="align-self:center">Agreed swap on your To swap list</span>`;
+  if (theirs && !pendOffer) html += `<span class="pill gold" style="align-self:center">They've sent you an offer, see above</span>`;
+  else if (pendOffer) html += `<span class="pill gold" style="align-self:center">Offer sent · waiting</span><button type="button" class="linkbtn" data-cancel="${esc(pendOffer.id)}">Cancel offer</button>`;
+  else if (any) html += `<button type="button" class="btn small gold" data-offer="${esc(f.id)}">${agreed ? 'Send another offer' : 'Send swap offer'}</button>`;
   html += `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy message</button>`;
   if (any) html += `<button type="button" class="linkbtn" data-done="${esc(f.id)}">Swapped in person? Update my cards</button>`;
   return html;
+}
+function toSwapHTML(list){
+  return `<div class="panel todo" id="toSwapPanel"><div class="row between wrap"><h2>To swap · ${list.length}</h2><button type="button" class="btn small" id="copyToSwap">Copy list</button></div>
+    <p class="help" style="margin-top:4px">Agreed swaps. Take these cards along, then tap <b>We've swapped</b> so your cards update.</p>
+    ${list.map(x => `<div class="offer"><p style="margin:0"><b>${esc(x.other ? x.other.full : 'Someone')}</b> <small class="muted">· agreed ${esc(ago(x.at).replace('updated ', ''))}</small></p>
+      <h4>You get · ${x.get.length}</h4>${idChips(x.get, 'get')}
+      <h4>You give · ${x.give.length}</h4>${idChips(x.give, 'give')}
+      <div class="actions"><button type="button" class="btn small gold" data-handover="${esc(x.id)}">We've swapped</button><button type="button" class="btn small" data-calloff="${esc(x.id)}">Call off</button></div></div>`).join('')}</div>`;
+}
+function toSwapText(list){
+  const fmt = ids => ids.map(id => `${id} ${BY_ID.get(id).name}`).join(', ') || 'nothing';
+  return ['Swaps to hand over · Topps Premier League 26/27'].concat(list.map(x => `${x.other ? x.other.full : 'Someone'}: you give ${fmt(x.give)} · you get ${fmt(x.get)}`)).join('\n');
 }
 function offerWarnings(me, o){
   const w = [];
@@ -1988,14 +2094,15 @@ function incomingHTML(me, inc){
       <h4>You get · ${o.give.length}</h4>${idChips(o.give, 'get')}
       <h4>You give · ${o.get.length}</h4>${idChips(o.get, 'give')}
       ${w.length ? `<p class="flag">Check first: ${esc(w.join('; '))}</p>` : ''}
-      <div class="actions"><button type="button" class="btn small gold" data-accept="${esc(from.id)}" data-oid="${esc(o.id)}">Accept and update my cards</button><button type="button" class="btn small" data-decline="${esc(from.id)}" data-oid="${esc(o.id)}">Decline</button></div></div>`;
+      <div class="actions"><button type="button" class="btn small gold" data-accept="${esc(from.id)}" data-oid="${esc(o.id)}">Accept swap</button><button type="button" class="btn small" data-decline="${esc(from.id)}" data-oid="${esc(o.id)}">Decline</button></div>
+      <p class="help">Accepting puts it on both your To swap lists. No cards change until you've swapped.</p></div>`;
   }).join('')}</div>`;
 }
 function outgoingHTML(outg){
   return `<div class="panel"><h2>Your offers</h2>${outg.map(({ o, to, reply }) => {
     const name = to ? to.full : 'Someone who left';
-    const state = o.st === 'open' ? (reply ? (reply.s === 'accepted' ? 'Accepted, updating your cards' : 'Declined') : `Waiting for ${name}`)
-      : o.st === 'done' ? 'Accepted · cards updated' : o.st === 'declined' ? 'Declined' : 'Cancelled';
+    const state = o.st === 'open' ? (reply ? (reply.s === 'accepted' ? 'Swapped, updating your cards' : reply.s === 'cancelled' ? 'Called off' : 'Declined') : `Waiting for ${name}`)
+      : o.st === 'done' ? 'Swapped · cards updated' : o.st === 'declined' ? 'Declined' : 'Called off';
     return `<div class="orow"><div><b>${esc(name)}</b> · ${esc(state)}<br><small class="muted">You get ${esc(o.get.join(', ') || 'nothing')} · you give ${esc(o.give.join(', ') || 'nothing')}</small></div>${o.st === 'open' && !reply ? `<button type="button" class="linkbtn" data-cancel="${esc(o.id)}">Cancel</button>` : ''}</div>`;
   }).join('')}</div>`;
 }
@@ -2034,6 +2141,7 @@ function renderFriends(){
   el.innerHTML = html;
 }
 function renderAll(){
+  RES = new Map();
   renderWho(); renderNotice(); renderTabs(); renderSummary(); renderModes(); renderAddMode(); renderPad(); renderPreview(); renderGrid(); renderBadges();
   if (S.tab === 'swaps') renderSwaps();
   if (S.tab === 'friends') renderFriends();
@@ -2296,18 +2404,18 @@ function openOffer(fid){
   if (!me || !f || f.demo) return;
   if (!canWriteActive()){ needJoin(); return; }
   const m = computeMatch(me, f);
-  const promised = promisedSpares(me);
+  const promised = resFor(me.id).out;
   const k = m.score;
   let gi = 0, gv = 0;
   const row = (c, side, checked, note) => `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" ${checked ? 'checked' : ''} ${note ? 'disabled' : ''}> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}${note ? ' · ' + note : ''}</small></label></li>`;
   const getRows = m.get.map(c => row(c, 'get', gi++ < k, '')).join('');
   const giveRows = m.give.map(c => {
     const free = cnt(me, c.id) - 1 - (promised[c.id] || 0);
-    const note = free > 0 ? '' : 'already in another offer';
+    const note = free > 0 ? '' : 'already in another swap';
     return row(c, 'give', !note && gv++ < k, note);
   }).join('');
   openSheet(`<h2 id="sheetTitle">Swap offer to ${esc(f.full)}</h2>
-    <p>Tick the cards for this swap. When ${esc(f.nick)} accepts, both your lists update.</p>
+    <p>Tick the cards for this swap. When ${esc(f.nick)} accepts, it goes on both your To swap lists. Cards only change when you mark it as swapped.</p>
     <h4 style="margin-top:12px">You get from ${esc(f.nick)}</h4>${getRows ? `<ul class="scanlist">${getRows}</ul>` : '<small class="muted">Nothing they have spare that you need.</small>'}
     <h4 style="margin-top:12px">You give to ${esc(f.nick)}</h4>${giveRows ? `<ul class="scanlist">${giveRows}</ul>` : `<small class="muted">${f.complete ? 'Nothing of yours that they need.' : esc(f.nick) + " hasn't switched on their needs yet."}</small>`}
     <div class="sheet-actions"><button type="button" class="btn gold" id="offerGo">Send offer</button></div>`, root => {
@@ -2337,15 +2445,14 @@ async function respondOffer(fromId, offerId, accept){
   const d = mutable(pid);
   d.replies = d.replies || {};
   if (d.replies[offerId]) return;
-  if (accept) acceptInto(d, o);
-  d.replies[offerId] = { s: accept ? 'accepted' : 'declined', at: Date.now() };
+  d.replies[offerId] = accept ? { s: 'accepted', at: Date.now(), v: 2 } : { s: 'declined', at: Date.now() };
   pruneReplies(d);
   S.undo = null;
   S.dirty.add(pid);
   const ok = await flush(pid);
   renderAll();
   if (!ok) toast("Couldn't save just now. It'll retry.");
-  else toast(accept ? `Swap accepted. Your cards are updated. ${from.nick}'s update when they next open the app.` : 'Offer declined');
+  else toast(accept ? "Swap agreed. It's on your To swap list. Tap We've swapped when you've done it." : 'Offer declined');
 }
 async function cancelOffer(offerId){
   const pid = S.activeId;
@@ -2358,6 +2465,54 @@ async function cancelOffer(offerId){
   await flush(pid);
   renderAll(); toast('Offer cancelled');
   scheduleSettle();
+}
+function findPending(id){ return pendingFor(S.activeId).find(x => x.id === id) || null; }
+function openHandover(id){
+  const x = findPending(id);
+  if (!x){ toast('That swap has already been updated'); renderAll(); return; }
+  const li = (cid, side) => { const c = BY_ID.get(cid); return `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" checked> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}</small></label></li>`; };
+  const nick = x.other ? x.other.nick : 'they';
+  openSheet(`<h2 id="sheetTitle">Swapped with ${esc(x.other ? x.other.full : 'them')}?</h2>
+    <p>Untick any card that didn't change hands. Your cards update now, and ${esc(nick)}'s update when their app next opens.</p>
+    <h4 style="margin-top:12px">You got</h4>${x.get.length ? `<ul class="scanlist">${x.get.map(c => li(c, 'got')).join('')}</ul>` : '<small class="muted">Nothing</small>'}
+    <h4 style="margin-top:12px">You gave</h4>${x.give.length ? `<ul class="scanlist">${x.give.map(c => li(c, 'gave')).join('')}</ul>` : '<small class="muted">Nothing</small>'}
+    <div class="sheet-actions"><button type="button" class="btn gold" id="handGo">Update my cards</button></div>`, root => {
+      root.querySelector('#handGo').addEventListener('click', async () => {
+        const pick = side => [...root.querySelectorAll(`input[data-side="${side}"]:checked`)].map(i => i.value);
+        root.querySelector('#handGo').disabled = true;
+        await completeSwap(id, pick('got'), pick('gave'));
+      });
+    });
+}
+async function completeSwap(id, got, gave){
+  if (!canWriteActive()){ needJoin(); return; }
+  const x = findPending(id);
+  if (!x){ closeSheet(); renderAll(); return; }
+  const pid = S.activeId, d = mutable(pid);
+  if (x.role === 'sender'){
+    const o = (d.offers || []).find(z => z.id === id);
+    if (!o || o.st !== 'open'){ closeSheet(); renderAll(); return; }
+    applyHandover(d, gave, got); o.st = 'done'; o.done = { gave, got, at: Date.now() };
+  } else {
+    d.replies = d.replies || {};
+    const r = d.replies[id];
+    if (!isAgreed(r) || r.done){ closeSheet(); renderAll(); return; }
+    applyHandover(d, gave, got); r.done = { gave, got, at: Date.now() };
+  }
+  S.undo = null; S.dirty.add(pid);
+  const ok = await flush(pid);
+  closeSheet(); renderAll();
+  toast(ok ? `Swap with ${x.other ? x.other.nick : 'them'} done. Your cards are updated.` : "Couldn't save just now. It'll retry.");
+}
+async function callOff(id){
+  const x = findPending(id);
+  if (!x || !canWriteActive()) return;
+  const pid = S.activeId, d = mutable(pid);
+  if (x.role === 'sender'){ const o = (d.offers || []).find(z => z.id === id); if (o && o.st === 'open') o.st = 'cancelled'; }
+  else { const r = (d.replies || {})[id]; if (r && isAgreed(r) && !r.done) r.s = 'cancelled'; }
+  S.dirty.add(pid);
+  await flush(pid);
+  renderAll(); toast(`Swap with ${x.other ? x.other.nick : 'them'} called off`);
 }
 function swapMessage(me, m){
   const fmt = cs => cs.map(c => `${c.id} ${c.name}`).join(', ');
@@ -2609,6 +2764,7 @@ $('#summary').addEventListener('click', e => {
   if (e.target.closest('#openSettings')) openSettings();
   if (e.target.closest('#joinBtn')) openJoin();
   if (e.target.closest('#joinBtnWeb')) openWelcome();
+  if (e.target.closest('#goToSwap')){ S.tab = 'swaps'; store.set('tab', 'swaps'); renderAll(); const t = $('#toSwapPanel'); if (t) t.scrollIntoView({ block: 'start' }); }
   if (e.target.closest('#showSwaps')){
     S.section = 'all'; S.filter = 'swap'; S.query = '';
     $('#section').value = 'all'; $('#search').value = '';
@@ -2640,6 +2796,13 @@ $('#view-swaps').addEventListener('click', e => {
   const ac = e.target.closest('[data-accept]'); if (ac){ ac.disabled = true; respondOffer(ac.dataset.accept, ac.dataset.oid, true); return; }
   const de = e.target.closest('[data-decline]'); if (de){ de.disabled = true; respondOffer(de.dataset.decline, de.dataset.oid, false); return; }
   const ca = e.target.closest('[data-cancel]'); if (ca){ cancelOffer(ca.dataset.cancel); return; }
+  const ho = e.target.closest('[data-handover]'); if (ho){ openHandover(ho.dataset.handover); return; }
+  const co = e.target.closest('[data-calloff]');
+  if (co){
+    if (co.dataset.armed !== '1'){ co.dataset.armed = '1'; co.textContent = 'Tap again to call off'; return; }
+    co.disabled = true; callOff(co.dataset.calloff); return;
+  }
+  if (e.target.closest('#copyToSwap')){ copyText(toSwapText(pendingFor(S.activeId)), 'To swap list copied'); return; }
   const c = e.target.closest('[data-copy]');
   if (c){ const me = activeDoc(); const f = getDoc(c.dataset.copy); if (me && f) copyText(swapMessage(me, computeMatch(me, f))); return; }
   const d = e.target.closest('[data-done]'); if (d){ openDone(d.dataset.done); return; }
@@ -2760,7 +2923,7 @@ async function loadAdmin(){
 async function onAuth(user){
   if (!user){
     if (S.unsub){ S.unsub(); S.unsub = null; }
-    Object.assign(S, { uid: null, authUser: null, isOwner: false, adminUid: null, players: {}, local: {}, loaded: false, activeId: null, status: 'signedout', readOnly: false, onboardAsked: false, seenIncoming: null, demo: false, demoPlayers: [] });
+    Object.assign(S, { uid: null, authUser: null, isOwner: false, adminUid: null, players: {}, local: {}, loaded: false, activeId: null, status: 'signedout', readOnly: false, onboardAsked: false, seenIncoming: null, seenAgreed: null, demo: false, demoPlayers: [] });
     S.dirty.clear(); S.saving.clear(); S.again.clear();
     renderAll(); openWelcome();
     return;
@@ -2770,7 +2933,7 @@ async function onAuth(user){
   S.myName = user.displayName || '';
   if (!changed){ renderAll(); return; }
   if (S.unsub){ S.unsub(); S.unsub = null; }
-  Object.assign(S, { uid: user.uid, players: {}, local: {}, loaded: false, onboardAsked: false, seenIncoming: null, readOnly: false, activeId: user.uid, status: 'loading' });
+  Object.assign(S, { uid: user.uid, players: {}, local: {}, loaded: false, onboardAsked: false, seenIncoming: null, seenAgreed: null, readOnly: false, activeId: user.uid, status: 'loading' });
   if (S.welcomeOpen) closeSheet();
   renderAll();
   await loadAdmin();
@@ -2846,7 +3009,7 @@ async function init(){
   renderAll();
   subscribe();
 }
-window.__ggn = { aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleOffers, acceptInto, promisedSpares, toStore };
+window.__ggn = { aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor };
 init();
 })();
 </script>
