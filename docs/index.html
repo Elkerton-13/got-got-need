@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Kick-off screen: once per visit, unless switched off in Settings. Add ?kick to the link to force it. */
+(function(){var on=true;try{if(localStorage.getItem('ggn.kickoff')==='off')on=false;if(sessionStorage.getItem('ggn.kicked')==='1')on=false;}catch(e){}if(/[?&]kick(=|&|$)/.test(location.search))on=true;if(on)document.documentElement.classList.add('kick');})();
+</script>
 <title>Got Got Need</title>
 <meta name="description" content="Swap Topps Premier League 2026/27 cards with your mates. Add your swaps, see who to swap with, agree swaps.">
 <meta name="theme-color" content="#EDF0F6" media="(prefers-color-scheme: light)">
@@ -301,9 +305,641 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   .tile.pop{animation:none}
   .toggle input,.toggle input::after{transition:none}
 }
+
+/* kick-off screen: shown when the app opens, flick the ball into the net to go in */
+#kick{display:none}
+html.kick,html.kick body{overflow:hidden;overscroll-behavior:none}
+html.kick #kick{display:block}
+#kick{position:fixed;inset:0;z-index:100;overflow:hidden;background:#050B1C;color:#fff;font:15px/1.4 var(--body);touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#kick.k-out{opacity:0;transform:scale(1.04);transition:opacity .4s ease,transform .4s ease;pointer-events:none}
+.k-svg{position:absolute;inset:0;display:block;width:100%;height:100%}
+.k-head{position:absolute;top:0;left:0;right:0;padding:18px 20px 0;text-align:center;pointer-events:none;transition:opacity .25s}
+.k-cheer .k-head,.k-talk .k-head{opacity:.1}
+.k-logo{display:block;width:60px;height:60px;margin:0 auto 10px;border-radius:14px;box-shadow:0 8px 22px rgba(0,0,0,.5)}
+.k-hi{margin:0;font:800 12.5px/1.25 var(--body);letter-spacing:.16em;text-transform:uppercase;color:#F5C542;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.k-title{margin:5px 0 0;font:800 clamp(36px,11vw,56px)/.92 var(--display);letter-spacing:.01em;text-transform:uppercase;color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.35),0 10px 28px rgba(0,0,0,.45)}
+.k-tag{max-width:31ch;margin:9px auto 0;font-size:14px;line-height:1.35;color:rgba(255,255,255,.88);text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 14px rgba(5,11,28,.95)}
+.k-stage{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;--fs:clamp(13px,calc(var(--sc,1) * 16px),19px)}
+.k-hint{position:absolute;left:50%;top:95.6%;margin:0;padding:7px 14px;border-radius:999px;background:rgba(5,11,28,.62);font:700 var(--fs)/1.2 var(--body);white-space:nowrap;transform:translate(-50%,-50%);transition:opacity .2s}
+.k-busy .k-hint{opacity:0}
+.k-say,.k-goal{position:absolute;left:50%;margin:0;text-align:center;white-space:nowrap;transform:translate(-50%,-50%);opacity:0;pointer-events:none}
+.k-say{top:38%}
+.k-say b{display:block;font:800 calc(var(--fs) * 2.7)/1 var(--display);text-transform:uppercase;letter-spacing:.02em;text-shadow:0 3px 0 #BF2530,0 8px 20px rgba(0,0,0,.6)}
+.k-say span{display:inline-block;margin-top:10px;padding:5px 12px;border-radius:999px;background:rgba(5,11,28,.65);font:700 var(--fs)/1.2 var(--body)}
+.k-goal{top:37%;font:800 calc(var(--fs) * 4.4)/.9 var(--display);text-transform:uppercase;letter-spacing:.02em;text-shadow:0 4px 0 #E9AE1C,0 9px 0 rgba(0,0,0,.25),0 16px 34px rgba(0,0,0,.6)}
+.k-goal small{display:block;margin-top:12px;font:800 var(--fs)/1.2 var(--body);letter-spacing:.08em;color:#F5C542;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.k-ballbtn{position:absolute;left:50%;top:85.6%;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:transparent;transform:translate(-50%,-50%);pointer-events:auto;cursor:grab;-webkit-tap-highlight-color:transparent}
+.k-ballbtn:focus-visible{outline:3px solid #F5C542;outline-offset:3px}
+.k-skip{position:absolute;top:12px;right:12px;z-index:3;min-height:40px;padding:0 16px;border:1px solid rgba(255,255,255,.35);border-radius:20px;background:rgba(5,11,28,.5);color:#fff;font:700 14px/1 var(--body);cursor:pointer}
+.k-skip:focus-visible{outline:3px solid #F5C542;outline-offset:2px}
+.k-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.k-conf{position:absolute;left:0;top:0;width:8px;height:12px;border-radius:2px;pointer-events:none}
+.k-board{font:800 12px var(--display);letter-spacing:1.5px;fill:#fff}
+.k-chev path{fill:none;stroke:#fff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;opacity:.15;animation:kChev 1.6s ease-in-out infinite}
+.k-chev path:nth-child(2){animation-delay:.18s}
+.k-chev path:nth-child(3){animation-delay:.36s}
+@keyframes kChev{0%,100%{opacity:.15}35%{opacity:.95}}
+.k-busy .k-chev,.k-busy .k-ring{display:none}
+#kTrail{transition:opacity .25s}
+.k-cheer .k-c1{animation:kJump .26s ease-in-out 6 alternate}
+.k-cheer .k-c2{animation:kJump .26s ease-in-out .09s 6 alternate}
+.k-cheer .k-c3{animation:kJump .26s ease-in-out .18s 6 alternate}
+@keyframes kJump{to{transform:translateY(-5px)}}
+@media (max-height:620px){
+  .k-head{padding-top:12px}
+  .k-logo{width:46px;height:46px;margin-bottom:6px}
+  .k-tag{font-size:13px}
+}
+@media (orientation:landscape) and (max-height:520px){
+  .k-head{right:auto;display:grid;grid-template-columns:auto auto;column-gap:12px;align-items:center;padding:12px 0 0 16px;text-align:left}
+  .k-logo{grid-row:1 / span 2;width:44px;height:44px;margin:0}
+  .k-hi{font-size:11px}
+  .k-title{margin:2px 0 0;font-size:28px}
+  .k-tag{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  #kick.k-out{transform:none}
+  .k-chev path{animation:none;opacity:.6}
+}
 </style>
 </head>
 <body>
+<div id="kick" role="dialog" aria-modal="true" aria-labelledby="kickTitle" aria-describedby="kickHint">
+  <svg id="kickSvg" class="k-svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false"></svg>
+  <div class="k-head">
+    <img class="k-logo" src="icons/icon-192.png" alt="" width="60" height="60">
+    <p class="k-hi" id="kickHi">Welcome to</p>
+    <h2 class="k-title" id="kickTitle">Got Got Need</h2>
+    <p class="k-tag">Swap Topps Premier League 2026/27 cards with your mates</p>
+  </div>
+  <div class="k-stage" id="kickStage">
+    <p class="k-hint" id="kickHint">Flick the ball into the net to kick off</p>
+    <p class="k-say" id="kickSay" aria-hidden="true"></p>
+    <p class="k-goal" id="kickGoal" aria-hidden="true"></p>
+    <button type="button" class="k-ballbtn" id="kickBall" aria-label="Kick the ball and start"></button>
+  </div>
+  <div class="k-flash" id="kickFlash"></div>
+  <button type="button" class="k-skip" id="kickSkip">Skip</button>
+  <p class="sr" id="kickLive" role="status" aria-live="polite"></p>
+</div>
+<script>
+/* ===================== Kick-off screen =====================
+   A penalty from behind the ball. Pitch maths in yards: X across (+ right), Z from the goal line
+   towards the camera, Y height. Flick direction picks where the ball goes, flick speed how high,
+   a curved flick bends it. The keeper can save (never the very first time, never twice running). */
+(() => {
+const html = document.documentElement, root = document.getElementById('kick');
+if (!root) return;
+if (!html.classList.contains('kick')){ root.remove(); return; }
+const queue = [], timers = [];
+let st = 'ready', lastOut = '', finished = false, raf = 0, onKey = null, onResize = null;
+const KICK = window.GGN_KICK = {
+  active: true,
+  onDone(fn){ if (KICK.active) queue.push(fn); else { try { fn(); } catch (e) {} } },
+  state: () => st, outcome: () => lastOut, finish: () => finish()
+};
+const ls = {
+  get(k){ try { return localStorage.getItem('ggn.' + k); } catch (e) { return null; } },
+  set(k, v){ try { localStorage.setItem('ggn.' + k, v); } catch (e) {} }
+};
+const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+function finish(instant){
+  if (finished) return;
+  finished = true; st = 'out';
+  try { sessionStorage.setItem('ggn.kicked', '1'); } catch (e) {}
+  ls.set('kickedBefore', '1');
+  timers.forEach(clearTimeout);
+  cancelAnimationFrame(raf);
+  if (onKey) window.removeEventListener('keydown', onKey, true);
+  if (onResize) window.removeEventListener('resize', onResize);
+  const done = () => {
+    root.remove();
+    html.classList.remove('kick');
+    KICK.active = false;
+    document.querySelectorAll('[data-kinert]').forEach(el => { el.inert = false; el.removeAttribute('inert'); el.removeAttribute('data-kinert'); });
+    const sheet = document.getElementById('sheet');
+    if (sheet && !sheet.hidden){
+      const f = sheet.querySelector('#sheetBody input,#sheetBody textarea,#sheetBody button:not([data-close])') || sheet.querySelector('.closex');
+      if (f) try { f.focus({ preventScroll: true }); } catch (e) {}
+    }
+    queue.splice(0).forEach(fn => { try { fn(); } catch (e) {} });
+  };
+  if (instant){ done(); return; }
+  root.classList.add('k-out');
+  setTimeout(done, 400);
+}
+try {
+  const $k = id => document.getElementById(id);
+  const later = (fn, ms) => { timers.push(setTimeout(fn, ms)); };
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  const ease = q => 1 - Math.pow(1 - q, 3);
+  const lerp = (a, b, q) => a + (b - a) * q;
+  const lerp2 = (a, b, q) => [lerp(a[0], b[0], q), lerp(a[1], b[1], q)];
+  const r1 = n => Math.round(n * 10) / 10, r2 = n => Math.round(n * 100) / 100;
+  const CX = 200, F = 495, CAMZ = 18, CAMH = 4.09, Y0 = 287.5;
+  const P = (X, Z, Y) => { const k = F / (CAMZ - Z); return [CX + X * k, Y0 + (CAMH - (Y || 0)) * k, k]; };
+  const pt = (X, Z, Y) => { const p = P(X, Z, Y); return r1(p[0]) + ',' + r1(p[1]); };
+  const BALL_R = .12, KZ = .6, SPOT = 12, SC = .927;
+  const visR = Z => BALL_R * (1.75 + .85 * clamp01(Z / SPOT));
+  const REST = P(0, SPOT, visR(SPOT));
+  const GL = P(0, 0)[1];
+  const AIMK = (REST[1] - GL) / (F / CAMZ);
+  let seed = 11;
+  const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+
+  /* ---------- scene ---------- */
+  const SHIRT = ['#C8102E', '#1E4FD8', '#F4F6FA', '#E9AE1C', '#0E7C4A', '#6CABDD', '#7A263A', '#132257', '#EB172B', '#454B5A', '#FF8A00', '#5B2C83'];
+  const SKIN = ['#F1C7A5', '#E0AC82', '#C68B59', '#A0673F', '#7A4A2A', '#5A3720'];
+  const tile = (id, sc) => {
+    let g = '';
+    for (let row = 0; row < 3; row++) for (let i = 0; i < 8; i++){
+      const x = i * 8 + 4 + (rnd() - .5) * 2.4, y = row * 10 + 6 + (rnd() - .5) * 1.6;
+      g += `<ellipse cx="${r1(x)}" cy="${r1(y + 3.3)}" rx="3.3" ry="2.9" fill="${SHIRT[rnd() * SHIRT.length | 0]}"/><circle cx="${r1(x)}" cy="${r1(y - 1)}" r="2" fill="${SKIN[rnd() * SKIN.length | 0]}"/>`;
+    }
+    return `<pattern id="${id}" width="64" height="30" patternUnits="userSpaceOnUse" patternTransform="scale(${sc})"><rect width="64" height="30" fill="#0C1631"/>${g}</pattern>`;
+  };
+  const bTop = P(0, -4, 1)[1], bBot = P(0, -4, 0)[1];
+  const FTL = pt(-4, 0, 2.6), FTR = pt(4, 0, 2.6), FBL = pt(-4, 0, 0), FBR = pt(4, 0, 0);
+  const BTL = pt(-4, -2, 2), BTR = pt(4, -2, 2), BBL = pt(-4, -2, 0), BBR = pt(4, -2, 0);
+  const pent = (cx, cy, r, rot) => { let d = ''; for (let i = 0; i < 5; i++){ const a = rot + i * 1.2566; d += (i ? 'L' : 'M') + r2(cx + Math.cos(a) * r) + ' ' + r2(cy + Math.sin(a) * r); } return d + 'Z'; };
+  let pents = pent(0, 0, .34, -Math.PI / 2), seams = '';
+  for (let i = 0; i < 5; i++){
+    const a = -Math.PI / 2 + Math.PI / 5 + i * 1.2566, b = -Math.PI / 2 + i * 1.2566;
+    pents += pent(Math.cos(a) * .86, Math.sin(a) * .86, .3, a + Math.PI);
+    seams += `M${r2(Math.cos(b) * .34)} ${r2(Math.sin(b) * .34)}L${r2(Math.cos(b) * .66)} ${r2(Math.sin(b) * .66)}`;
+  }
+  const pl = P(-4.065, 0), pr = P(4.065, 0), bar = P(0, 0, 2.735)[1], pw = 4.4;
+  let s = `<defs>
+    <linearGradient id="kgSky" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="${r1(bTop)}"><stop offset="0" stop-color="#030712"/><stop offset=".6" stop-color="#0A1734"/><stop offset="1" stop-color="#132A5E"/></linearGradient>
+    <linearGradient id="kgShade" gradientUnits="userSpaceOnUse" x1="0" y1="60" x2="0" y2="${r1(bTop)}"><stop offset="0" stop-color="#050B1C"/><stop offset=".45" stop-color="#050B1C" stop-opacity=".74"/><stop offset="1" stop-color="#050B1C" stop-opacity=".05"/></linearGradient>
+    <radialGradient id="kgGlow"><stop offset="0" stop-color="#C5D4FF" stop-opacity=".34"/><stop offset="1" stop-color="#C5D4FF" stop-opacity="0"/></radialGradient>
+    <linearGradient id="kgBoard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A5CF0"/><stop offset="1" stop-color="#173CB0"/></linearGradient>
+    <radialGradient id="kgPitch" gradientUnits="userSpaceOnUse" cx="200" cy="470" r="470"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></radialGradient>
+    <pattern id="kpNet" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H6M0 0V6" stroke="#fff" stroke-width=".6" fill="none"/></pattern>
+    <radialGradient id="kgBall" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#EEF1F6"/><stop offset="1" stop-color="#B4BDCC"/></radialGradient>
+    <radialGradient id="kgBallSh" cx=".4" cy=".35" r=".75"><stop offset=".6" stop-color="#0F1B34" stop-opacity="0"/><stop offset="1" stop-color="#0F1B34" stop-opacity=".35"/></radialGradient>
+    <clipPath id="kcBall"><circle r="1"/></clipPath>
+    ${tile('kpC1', 1)}${tile('kpC2', .84)}${tile('kpC3', .7)}
+  </defs>
+  <rect x="-2400" y="-1600" width="5200" height="${r1(1600 + bTop)}" fill="url(#kgSky)"/>
+  <g class="k-crowd"><rect class="k-c3" x="-2400" y="148" width="5200" height="84" fill="url(#kpC3)"/><rect class="k-c2" x="-2400" y="226" width="5200" height="78" fill="url(#kpC2)"/><rect class="k-c1" x="-2400" y="298" width="5200" height="${r1(bTop - 298 + 10)}" fill="url(#kpC1)"/></g>
+  <rect x="-2400" y="-1600" width="5200" height="${r1(1600 + bTop)}" fill="url(#kgShade)"/>
+  <circle cx="-10" cy="150" r="190" fill="url(#kgGlow)"/><circle cx="410" cy="150" r="190" fill="url(#kgGlow)"/>
+  <g id="kPops"></g>
+  <rect x="-2400" y="${r1(bTop)}" width="5200" height="${r1(bBot - bTop)}" fill="url(#kgBoard)"/>
+  <rect x="-2400" y="${r1(bTop)}" width="5200" height="1" fill="#fff" opacity=".28"/>
+  <text class="k-board" x="-1300" y="${r1(bBot - (bBot - bTop) * .3)}">${'GOT GOT NEED · SWAP YOUR SPARES · '.repeat(24)}</text>
+  <rect x="-2400" y="${r1(bBot)}" width="5200" height="2600" fill="#2E8C3C"/>`;
+  for (let z = -4, i = 0; z < 16; z += 2, i++){
+    if (i % 2) continue;
+    const y1 = P(0, z)[1], y2 = P(0, z + 2)[1];
+    s += `<rect x="-2400" y="${r1(y1)}" width="5200" height="${r1(y2 - y1)}" fill="#37A048"/>`;
+  }
+  const spot = P(0, SPOT);
+  s += `<rect x="-2400" y="${r1(bBot)}" width="5200" height="2600" fill="url(#kgPitch)"/>
+  <g fill="none" stroke="#F2F7F0" stroke-opacity=".85" stroke-width="1.6" stroke-linecap="round">
+    <path d="M-2400 ${r1(GL)}H2800"/>
+    <path d="M${pt(-10, 0)}L${pt(-10, 6)}L${pt(10, 6)}L${pt(10, 0)}"/>
+    <path d="M${pt(-22, 0)}L${pt(-22, 15)}M${pt(22, 0)}L${pt(22, 15)}"/>
+  </g>
+  <ellipse cx="${r1(spot[0])}" cy="${r1(spot[1])}" rx="4.6" ry="1.7" fill="#F2F7F0" opacity=".9"/>
+  <g id="kNet">
+    <polygon points="${BTL} ${BTR} ${BBR} ${BBL}" fill="#061024" fill-opacity=".22"/>
+    <polygon points="${FTL} ${BTL} ${BBL} ${FBL}" fill="#061024" fill-opacity=".14"/>
+    <polygon points="${FTR} ${BTR} ${BBR} ${FBR}" fill="#061024" fill-opacity=".14"/>
+    <polygon points="${BTL} ${BTR} ${BBR} ${BBL}" fill="url(#kpNet)" opacity=".75"/>
+    <polygon points="${FTL} ${BTL} ${BBL} ${FBL}" fill="url(#kpNet)" opacity=".55"/>
+    <polygon points="${FTR} ${BTR} ${BBR} ${FBR}" fill="url(#kpNet)" opacity=".55"/>
+    <path d="M${BTL}L${BTR}M${BTL}L${BBL}M${BTR}L${BBR}M${pt(-4.065, 0, 0)}L${BBL}M${pt(4.065, 0, 0)}L${BBR}" stroke="#DDE4EF" stroke-width="1.2" fill="none" opacity=".85"/>
+  </g>
+  <g id="kSlotA"></g>
+  <g id="kRoof">
+    <polygon points="${FTL} ${FTR} ${BTR} ${BTL}" fill="#061024" fill-opacity=".2"/>
+    <polygon points="${FTL} ${FTR} ${BTR} ${BTL}" fill="url(#kpNet)" opacity=".7"/>
+    <path d="M${pt(-4.065, 0, 2.67)}L${BTL}M${pt(4.065, 0, 2.67)}L${BTR}" stroke="#DDE4EF" stroke-width="1.2" fill="none" opacity=".85"/>
+  </g>
+  <g fill="#fff">
+    <rect x="${r1(pl[0] - pw / 2)}" y="${r1(bar)}" width="${pw}" height="${r1(GL - bar)}" rx="1.4"/>
+    <rect x="${r1(pr[0] - pw / 2)}" y="${r1(bar)}" width="${pw}" height="${r1(GL - bar)}" rx="1.4"/>
+    <rect x="${r1(pl[0] - pw / 2)}" y="${r1(bar)}" width="${r1(pr[0] - pl[0] + pw)}" height="${pw}" rx="1.4"/>
+    <rect x="${r1(pl[0] + pw / 2 - 1.3)}" y="${r1(bar + pw)}" width="1.3" height="${r1(GL - bar - pw)}" fill="#C9D3E3"/>
+    <rect x="${r1(pr[0] + pw / 2 - 1.3)}" y="${r1(bar + pw)}" width="1.3" height="${r1(GL - bar - pw)}" fill="#C9D3E3"/>
+    <rect x="${r1(pl[0] + pw / 2)}" y="${r1(bar + pw - 1.2)}" width="${r1(pr[0] - pl[0] - pw)}" height="1.2" fill="#C9D3E3"/>
+  </g>
+  <g id="kSlotB"></g>
+  <ellipse id="kKSh" fill="#000" opacity=".28"/>
+  <g id="kKeep"><g>
+    <path d="M-.12 -.94L-.23 -.08M.12 -.94L.23 -.08" stroke="#14203F" stroke-width=".18" stroke-linecap="round" fill="none"/>
+    <path d="M-.215 -.36L-.23 -.1M.215 -.36L.23 -.1" stroke="#FF8A00" stroke-width=".19" stroke-linecap="round" fill="none"/>
+    <ellipse cx="-.26" cy="-.035" rx=".12" ry=".05" fill="#0B0F18"/><ellipse cx=".26" cy="-.035" rx=".12" ry=".05" fill="#0B0F18"/>
+    <path d="M-.28 -1.04H.28L.31 -.74H.03L0 -.82L-.03 -.74H-.31Z" fill="#14203F"/>
+    <line id="kArmL" x1="-.26" y1="-1.5" x2="-.74" y2="-1.12" stroke="#FF8A00" stroke-width=".16" stroke-linecap="round"/>
+    <line id="kArmR" x1=".26" y1="-1.5" x2=".74" y2="-1.12" stroke="#FF8A00" stroke-width=".16" stroke-linecap="round"/>
+    <path d="M-.31 -1.62Q0 -1.69 .31 -1.62L.28 -.98H-.28Z" fill="#FF8A00"/>
+    <path d="M-.3 -1.38H.3" stroke="#14203F" stroke-width=".06" opacity=".4"/>
+    <rect x="-.065" y="-1.74" width=".13" height=".12" fill="#B9794C"/>
+    <circle cy="-1.86" r=".165" fill="#C68B59"/>
+    <path d="M-.165 -1.87A.165 .165 0 0 1 .165 -1.87Q.05 -1.95 -.165 -1.87Z" fill="#2B1D14"/>
+    <circle id="kGlL" cx="-.74" cy="-1.12" r=".14" fill="#F4F6FA" stroke="#1E4FD8" stroke-width=".05"/>
+    <circle id="kGlR" cx=".74" cy="-1.12" r=".14" fill="#F4F6FA" stroke="#1E4FD8" stroke-width=".05"/>
+  </g></g>
+  <g class="k-chev">${[548, 528, 508].map(y => `<path d="M190 ${y + 5}L200 ${y - 5}L210 ${y + 5}"/>`).join('')}</g>
+  ${RM ? '' : `<circle class="k-ring" cx="${r1(REST[0])}" cy="${r1(REST[1])}" r="26" fill="none" stroke="#fff" stroke-width="2" opacity="0"><animate attributeName="r" values="26;46" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values=".7;0" dur="1.8s" repeatCount="indefinite"/></circle>`}
+  <g id="kSlotC"><g id="kBallWrap"><ellipse id="kBallSh" fill="#000"/><g id="kBall"><circle r="1" fill="url(#kgBall)"/><g clip-path="url(#kcBall)"><g id="kSpin"><path d="${pents}" fill="#1A2236"/><path d="${seams}" stroke="#7D879B" stroke-width=".05" fill="none"/></g></g><circle r="1" fill="url(#kgBallSh)"/><circle r="1" fill="none" stroke="#0F1B34" stroke-opacity=".3" stroke-width=".05"/></g></g></g>
+  <polyline id="kTrail" points="" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" style="opacity:0"/>`;
+  const svg = $k('kickSvg');
+  svg.innerHTML = s;
+
+  const stage = $k('kickStage'), hintEl = $k('kickHint'), sayEl = $k('kickSay'), goalEl = $k('kickGoal'), liveEl = $k('kickLive');
+  const ballBtn = $k('kickBall'), skipBtn = $k('kickSkip'), flashEl = $k('kickFlash');
+  const slotA = $k('kSlotA'), slotB = $k('kSlotB'), slotC = $k('kSlotC');
+  const ballWrap = $k('kBallWrap'), ballEl = $k('kBall'), spinEl = $k('kSpin'), ballSh = $k('kBallSh');
+  const keepEl = $k('kKeep'), kSh = $k('kKSh'), armL = $k('kArmL'), armR = $k('kArmR'), glL = $k('kGlL'), glR = $k('kGlR');
+  const netEls = [$k('kNet'), $k('kRoof')], trail = $k('kTrail'), pops = $k('kPops');
+  const attr = (el, o) => { for (const k in o) el.setAttribute(k, o[k]); };
+
+  const hello = ls.get('hello');
+  if (hello) $k('kickHi').textContent = 'Welcome back, ' + hello;
+  const fine = !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches);
+  const HINT = RM ? 'Tap the ball to kick off' : fine ? 'Drag and flick the ball into the net' : 'Flick the ball into the net to kick off';
+  hintEl.textContent = HINT;
+
+  /* ---------- layout: the stage box sits exactly over the 400×700 drawing ---------- */
+  let M = { sc: 1, left: 0, top: 0 };
+  function layout(){
+    const W = root.clientWidth || innerWidth, H = root.clientHeight || innerHeight;
+    const sc = Math.min(H / 700, W / 400 * 1.25);   // tall phones: fill the height, trim a little off the sides
+    M = { sc, left: (W - 400 * sc) / 2, top: H - 700 * sc };
+    svg.setAttribute('viewBox', `${r2(-M.left / sc)} ${r2(-M.top / sc)} ${r2(W / sc)} ${r2(H / sc)}`);
+    const st2 = stage.style;
+    st2.left = M.left + 'px'; st2.top = M.top + 'px'; st2.width = 400 * sc + 'px'; st2.height = 700 * sc + 'px';
+    st2.setProperty('--sc', sc.toFixed(3));
+    const d = Math.max(60, 76 * sc);
+    ballBtn.style.width = ballBtn.style.height = d + 'px';
+    ballBtn.style.top = (REST[1] / 7) + '%';
+  }
+  layout();
+  onResize = () => layout();
+  window.addEventListener('resize', onResize);
+
+  /* ---------- sound (made on the fly; the Sounds switch in Settings turns it off) ---------- */
+  let ac = null, noise = null;
+  function unlock(){
+    try {
+      if (!ac) ac = window.GGN_AC || new (window.AudioContext || window.webkitAudioContext)();
+      window.GGN_AC = ac;
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) { ac = null; }
+  }
+  // sounds queued while the phone is still waking the audio up play as soon as it's ready
+  const A = () => (ac && ac.state !== 'closed' && ls.get('sound') !== 'off') ? ac : null;
+  const noiseSrc = a => {
+    if (!noise){ noise = a.createBuffer(1, a.sampleRate * 2, a.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const n = a.createBufferSource(); n.buffer = noise; return n;
+  };
+  const envOut = (a, t0, peak, att, dec) => { const g = a.createGain(); g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + att); g.gain.exponentialRampToValueAtTime(.0001, t0 + att + dec); g.connect(a.destination); return g; };
+  const filt = (a, type, f, q) => { const b = a.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q) b.Q.value = q; return b; };
+  function sKick(p){
+    const a = A(); if (!a) return; const t = a.currentTime;
+    const o = a.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + .14);
+    o.connect(envOut(a, t, .6 * (.65 + .35 * p), .006, .18)); o.start(t); o.stop(t + .22);
+    const n = noiseSrc(a), lp = filt(a, 'lowpass', 1600); n.connect(lp); lp.connect(envOut(a, t, .3, .002, .05)); n.start(t); n.stop(t + .07);
+  }
+  function sSwish(){ const a = A(); if (!a) return; const t = a.currentTime; const n = noiseSrc(a), hp = filt(a, 'highpass', 2200); n.connect(hp); hp.connect(envOut(a, t, .14, .03, .3)); n.start(t); n.stop(t + .4); }
+  function sCheer(){
+    const a = A(); if (!a) return; const t = a.currentTime, dur = 2.6;
+    const n = noiseSrc(a); n.loop = true;
+    const b1 = filt(a, 'bandpass', 850, .8), b2 = filt(a, 'bandpass', 2100, 1.2);
+    const trem = a.createGain(); trem.gain.value = .8;
+    const lfo = a.createOscillator(); lfo.frequency.value = 7; const lg = a.createGain(); lg.gain.value = .2; lfo.connect(lg); lg.connect(trem.gain);
+    const g = a.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.26, t + .35); g.gain.setValueAtTime(.26, t + .9); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    n.connect(b1); n.connect(b2); b1.connect(trem); b2.connect(trem); trem.connect(g); g.connect(a.destination);
+    n.start(t); n.stop(t + dur); lfo.start(t); lfo.stop(t + dur);
+  }
+  function sOoh(){
+    const a = A(); if (!a) return; const t = a.currentTime;
+    const n = noiseSrc(a), b1 = filt(a, 'bandpass', 520, 4), b2 = filt(a, 'bandpass', 950, 5);
+    b1.frequency.exponentialRampToValueAtTime(330, t + .9); b2.frequency.exponentialRampToValueAtTime(700, t + .9);
+    const g = envOut(a, t, .3, .22, .9); n.connect(b1); n.connect(b2); b1.connect(g); b2.connect(g); n.start(t); n.stop(t + 1.2);
+  }
+  function sClang(){
+    const a = A(); if (!a) return; const t = a.currentTime;
+    [[1180, .16], [1770, .09], [2630, .05]].forEach(([fr, v]) => { const o = a.createOscillator(); o.type = 'triangle'; o.frequency.value = fr; o.connect(envOut(a, t, v, .003, .8)); o.start(t); o.stop(t + .85); });
+  }
+  function sGlove(){ const a = A(); if (!a) return; const t = a.currentTime; const n = noiseSrc(a), lp = filt(a, 'lowpass', 700); n.connect(lp); lp.connect(envOut(a, t, .5, .004, .12)); n.start(t); n.stop(t + .16); }
+
+  /* ---------- keeper ---------- */
+  const K = { x: 0, plan: null };
+  const IDLE_L = [-.74, 1.12], IDLE_R = [.74, 1.12];
+  function keeperAt(t){
+    if (!K.plan){
+      const ph = t / 1800 * 2 * Math.PI;
+      const x = RM ? 0 : .85 * Math.sin(ph), lean = RM ? 0 : Math.cos(ph) * .06;
+      K.x = x;
+      return { X: x, jump: RM ? 0 : Math.abs(Math.sin(t / 300)) * .04, ang: 0, hands: [[IDLE_L[0], IDLE_L[1] + lean], [IDLE_R[0], IDLE_R[1] - lean]] };
+    }
+    const p = K.plan;
+    if (p.kind === 'watch') return { X: p.x, jump: 0, ang: 0, hands: [[-.6, 1.02], [.6, 1.02]] };
+    const q = ease(clamp01((t - p.t0) / p.dur)), qa = Math.min(1, q * 1.5);
+    let slide = p.slide * q, jump = p.jump * Math.sin(q * Math.PI / 2), ang = p.ang * q;
+    let hands = [lerp2(IDLE_L, p.hands[0], qa), lerp2(IDLE_R, p.hands[1], qa)];
+    if (p.kind === 'dive' && t > p.t0 + p.dur + 140){
+      const fq = ease(clamp01((t - p.t0 - p.dur - 140) / 320)), sg = p.ang < 0 ? -1 : 1;
+      ang = lerp(p.ang, sg * 1.5, fq); jump = p.jump * (1 - fq); slide = p.slide + sg * .15 * fq;
+    }
+    if (p.kind === 'catch' && p.tc && t > p.tc){
+      const cq = ease(clamp01((t - p.tc) / 260));
+      hands = [lerp2(p.hands[0], [-.14, 1.3], cq), lerp2(p.hands[1], [.14, 1.3], cq)];
+      jump = p.jump * (1 - cq);
+    }
+    return { X: p.x + slide, jump, ang, hands };
+  }
+  const handsWorld = kp => { const c = Math.cos(kp.ang), sn = Math.sin(kp.ang); return kp.hands.map(h => [kp.X + h[0] * c + h[1] * sn, kp.jump + h[1] * c - h[0] * sn]); };
+  function drawKeeper(kp){
+    const [fx, fy, k] = P(kp.X, KZ, kp.jump);
+    keepEl.setAttribute('transform', `translate(${r2(fx)} ${r2(fy)}) scale(${r2(k)}) rotate(${r1(kp.ang * 57.296)})`);
+    const [l, r] = kp.hands;
+    attr(armL, { x2: r2(l[0]), y2: r2(-l[1]) }); attr(glL, { cx: r2(l[0]), cy: r2(-l[1]) });
+    attr(armR, { x2: r2(r[0]), y2: r2(-r[1]) }); attr(glR, { cx: r2(r[0]), cy: r2(-r[1]) });
+    const lean = Math.sin(kp.ang), g = P(kp.X + lean * .9, KZ, 0);
+    attr(kSh, { cx: r2(g[0]), cy: r2(g[1]), rx: r2(k * (.5 + Math.abs(lean) * .85)), ry: r2(k * .11) });
+  }
+  // hands meet the ball at (Xb, Yb): push off sideways, jump for high ones, stretch along the body
+  function solveDive(Xk, Xb, Yb){
+    const d = Xb - Xk, sg = d < 0 ? -1 : 1;
+    const slide = sg * Math.min(1.3, Math.max(.3, Math.abs(d) - 2));
+    const jump = Math.min(.55, Math.max(0, (Yb - 1.2) * .5));
+    const dx = Xb - (Xk + slide), up = Math.max(.15, Yb - jump);
+    const L = Math.hypot(dx, up);
+    return { slide, jump, ang: Math.atan2(dx, up), L, hands: [[-.12, L], [.12, L]] };
+  }
+
+  /* ---------- ball ---------- */
+  let fl = null, spin = 0, misses = 0, lastSaved = false, slotNow = slotC;
+  const firstEver = ls.get('kickedBefore') !== '1';
+  const E = s2 => s2 * (1.15 - .15 * s2);
+  const trueAt = (sh, A2, e) => [sh.X * e + sh.bow * 4 * e * (1 - e), SPOT - SPOT * e, BALL_R + (sh.Y - BALL_R) * e + A2 * 4 * e * (1 - e)];
+  function drawBall(X, Z, Y, alpha){
+    const vr = visR(Z), b = P(X, Z, Y - BALL_R + vr), r = vr * b[2];
+    ballEl.setAttribute('transform', `translate(${r2(b[0])} ${r2(b[1])}) scale(${r2(r)})`);
+    spinEl.setAttribute('transform', `rotate(${r1(spin % 360)})`);
+    const g = P(X, Z, 0), hgt = Math.max(0, Y - BALL_R), sr = r * 1.05 / (1 + hgt * .6);
+    attr(ballSh, { cx: r2(g[0]), cy: r2(g[1]), rx: r2(sr), ry: r2(sr * .3), opacity: r2(.38 / (1 + hgt * 1.4)) });
+    ballWrap.style.opacity = alpha;
+    const slot = Z >= KZ - .05 ? slotC : Z >= 0 ? slotB : slotA;
+    if (slot !== slotNow){ slot.appendChild(ballWrap); slotNow = slot; }
+  }
+  function stepBall(t, dt, kp){
+    const f = fl; if (!f) return;
+    spin += dt * f.spin;
+    if (f.phase !== 'fly') f.spin *= .9;
+    let X, Z, Y, alpha = 1;
+    if (f.phase === 'fly'){
+      const q = clamp01((t - f.t0) / f.T);
+      if (f.out === 'save' && q >= SC){
+        f.phase = K.plan && K.plan.kind === 'catch' ? 'held' : 'parry'; f.t1 = t; f.c = trueAt(f.sh, f.A, E(SC));
+        if (K.plan) K.plan.tc = t;
+        sGlove();
+        later(() => missed('save'), f.phase === 'held' ? 450 : 380);
+      } else if (q >= 1){
+        f.t1 = t; f.c = trueAt(f.sh, f.A, 1);
+        if (f.out === 'goal'){ f.phase = 'net'; goal(false); }
+        else if (f.out === 'postin'){ f.phase = 'postin'; sClang(); goal(true); }
+        else if (f.out === 'postout'){ f.phase = 'postout'; sClang(); later(() => missed('post'), 450); }
+        else { f.phase = 'wide'; later(() => missed('wide'), 420); }
+      }
+      if (f.phase === 'fly') [X, Z, Y] = trueAt(f.sh, f.A, E(q));
+    }
+    if (f.phase !== 'fly'){
+      const c = f.c, u = t - f.t1, sg = c[0] < 0 ? -1 : 1;
+      if (f.phase === 'net' || f.phase === 'postin'){
+        const dur = f.phase === 'postin' ? 200 : 150, tx = f.phase === 'postin' ? sg * 3.1 : c[0] * 1.06, q = clamp01(u / dur);
+        X = lerp(c[0], tx, q); Z = lerp(0, -1.75, q); Y = lerp(c[2], c[2] * .8, q);
+        if (u > dur){ const d = clamp01((u - dur) / 300); Y = lerp(c[2] * .8, BALL_R, d * d); }
+      } else if (f.phase === 'postout'){
+        const q = clamp01(u / 560);
+        X = c[0] + sg * 1.6 * q; Z = 3.2 * q; Y = Math.max(BALL_R, c[2] + 1.2 * q - 2.6 * q * q); alpha = 1 - clamp01((q - .55) / .45);
+      } else if (f.phase === 'wide'){
+        const q = clamp01(u / 260);
+        X = c[0] * (1 + .3 * q); Z = -3.6 * q; Y = c[2] * (1 - .1 * q);
+        if (u > 260){ const d = clamp01((u - 260) / 300); Y = lerp(c[2] * .9, BALL_R, d); alpha = 1 - d; }
+      } else if (f.phase === 'parry'){
+        const q = clamp01(u / 620), pg = (c[0] - (K.plan ? K.plan.x : 0)) < 0 ? -1 : 1;
+        X = c[0] + pg * 3.4 * ease(q); Z = c[1] - 2.6 * q; Y = Math.max(BALL_R, c[2] + .9 * q - 1.6 * q * q); alpha = 1 - clamp01((q - .5) / .5);
+      } else {
+        const hw = handsWorld(kp); X = (hw[0][0] + hw[1][0]) / 2; Y = Math.max(BALL_R, (hw[0][1] + hw[1][1]) / 2); Z = KZ + .15;
+      }
+    }
+    drawBall(X, Z, Y, alpha);
+  }
+
+  /* ---------- shots ---------- */
+  function canReach(sh, A2){
+    if (Math.abs(sh.X) > 2.9 && sh.Y > 1.75) return false;           // top corners: unstoppable
+    const c = trueAt(sh, A2, E(SC));
+    return solveDive(K.x, c[0], c[2]).L <= 2.65;
+  }
+  function planKeeper(sh, out, A2, tStart, tContact){
+    const Xk = K.x, dur = Math.max(200, tContact - tStart);
+    if (out === 'wide'){ K.plan = { kind: 'watch', x: Xk }; return; }
+    let tx = sh.X, ty = sh.Y;
+    if (out === 'save'){
+      const c = trueAt(sh, A2, E(SC));
+      if (Math.abs(c[0] - Xk) < .55 && c[2] < 1.9){
+        const jump = Math.max(0, (c[2] - 1.6) * .6), up = Math.max(.2, c[2] - jump);
+        K.plan = { kind: 'catch', x: Xk, t0: tStart, dur, slide: c[0] - Xk, jump, ang: 0, hands: [[-.13, up], [.13, up]] };
+        return;
+      }
+      tx = c[0]; ty = c[2];
+    } else if (out === 'goal' && !sh.auto && Math.abs(sh.X - Xk) < 1.3){
+      const sg = sh.X >= Xk ? -1 : 1; tx = Xk + sg * (2.4 + Math.random() * .6); ty = .5 + Math.random() * .9;   // went the wrong way
+    } else {
+      const sg = sh.X >= Xk ? 1 : -1; tx = sh.X - sg * (.8 + Math.random() * .3); ty = Math.max(.3, sh.Y * .85); // just too late
+    }
+    const d = solveDive(Xk, tx, ty);
+    K.plan = { kind: 'dive', x: Xk, t0: tStart, dur, slide: d.slide, jump: d.jump, ang: d.ang, hands: d.hands };
+  }
+  function shoot(sh){
+    if (st !== 'ready' && st !== 'aim') return;
+    st = 'fly'; root.classList.add('k-busy'); trail.style.opacity = '0';
+    const ax = Math.abs(sh.X);
+    let out = ax > 4.25 ? 'wide' : ax >= 3.88 ? (ax < 4.065 ? 'postin' : 'postout') : 'goal';
+    if (RM) out = 'goal';
+    const A2 = .12 + .5 * sh.p;
+    if (out === 'goal' && !sh.auto && !firstEver && !lastSaved && canReach(sh, A2) && Math.random() < .38) out = 'save';
+    lastSaved = out === 'save';
+    const t0 = performance.now(), T = 760 - 330 * sh.p;
+    sKick(sh.p);
+    if (RM){
+      fl = null; K.plan = null;
+      drawBall(sh.X * .9, -1.75, BALL_R, 1);
+      goal(false);
+      return;
+    }
+    fl = { sh, out, t0, T, A: A2, phase: 'fly', spin: (.25 + .5 * sh.p) * (sh.bow < 0 ? -1 : 1) };
+    planKeeper(sh, out, A2, t0 + 110, t0 + SC * T);
+  }
+  function autoShot(){
+    const sg = K.x > .1 ? -1 : K.x < -.1 ? 1 : (Math.random() < .5 ? -1 : 1);
+    shoot({ X: sg * (2.5 + Math.random() * .7), Y: .35 + Math.random() * 1.1, p: .62, bow: 0, auto: true });
+  }
+  KICK.shoot = o => shoot(Object.assign({ X: 0, Y: .5, p: .6, bow: 0, auto: false }, o));
+
+  /* ---------- outcomes ---------- */
+  const live = t => { liveEl.textContent = t; };
+  function goal(postIn){
+    if (st === 'over' || finished) return;
+    st = 'over'; lastOut = postIn ? 'postin' : 'goal';
+    root.classList.add('k-cheer');
+    sSwish(); sCheer();
+    live('Goal! Opening the app.');
+    goalEl.innerHTML = 'Goal!<small>' + (postIn ? 'In off the post!' : "Let's swap!") + '</small>';
+    if (RM) goalEl.style.opacity = '1';
+    else {
+      goalEl.animate([{ transform: 'translate(-50%,-50%) scale(.2)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1.18)', opacity: 1, offset: .6 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
+      flashEl.animate([{ opacity: 0 }, { opacity: .45 }, { opacity: 0 }], { duration: 300 });
+      const c = fl ? fl.c : [0, 0, 1], ip = P(c[0], -1.2, c[2]);
+      netEls.forEach(n => {
+        n.style.transformOrigin = `${r1(ip[0])}px ${r1(ip[1])}px`;
+        n.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.05,1.035)' }, { transform: 'scale(.985)' }, { transform: 'scale(1)' }], { duration: 560, easing: 'ease-out' });
+      });
+      confetti();
+      for (let i = 0; i < 16; i++){
+        const c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        attr(c2, { cx: r1(Math.random() * 520 - 60), cy: r1(150 + Math.random() * 200), r: 1.6, fill: '#fff', opacity: 0 });
+        pops.appendChild(c2);
+        c2.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 160, delay: 80 + Math.random() * 1200 });
+      }
+    }
+    if (navigator.vibrate) try { navigator.vibrate([25, 50, 25, 50, 70]); } catch (e) {}
+    later(() => finish(), RM ? 1100 : 1750);
+  }
+  function confetti(){
+    const W = root.clientWidth, gx = M.left + 200 * M.sc, gy = M.top + 360 * M.sc;
+    const cols = ['#E9AE1C', '#7C9BFF', '#FFFFFF', '#4CC38A', '#FF6B6B', '#1E4FD8'];
+    for (let i = 0; i < 40; i++){
+      const d = document.createElement('i');
+      d.className = 'k-conf'; d.style.background = cols[i % cols.length];
+      root.appendChild(d);
+      const ang = -Math.PI / 2 + (Math.random() - .5) * 2.6, v = (.25 + Math.random() * .4) * Math.max(W, 360), rot = Math.random() * 720 - 360;
+      const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v;
+      d.animate([
+        { transform: `translate(${gx}px,${gy}px) rotate(0deg)`, opacity: 1 },
+        { transform: `translate(${gx + dx * .7}px,${gy + dy * .7}px) rotate(${rot}deg)`, opacity: 1, offset: .45 },
+        { transform: `translate(${gx + dx}px,${gy + dy + 300}px) rotate(${rot * 2}deg)`, opacity: 0 }
+      ], { duration: 1500 + Math.random() * 500, easing: 'cubic-bezier(.15,.6,.4,1)', fill: 'forwards' });
+    }
+  }
+  const SAY = { save: ['Saved!', 'Go again'], wide: ['Wide!', 'Have another go'], post: ['Off the post!', 'So close. Go again'] };
+  function missed(kind){
+    if (finished || st === 'over') return;
+    lastOut = kind; misses++;
+    sOoh();
+    const [big, small] = SAY[kind];
+    sayEl.innerHTML = `<b>${big}</b><span>${small}</span>`;
+    root.classList.add('k-talk');
+    sayEl.animate([{ transform: 'translate(-50%,-50%) scale(.6)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
+    live(`${big} ${small}.`);
+    later(resetBall, 1250);
+  }
+  function resetBall(){
+    if (finished) return;
+    sayEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' });
+    root.classList.remove('k-talk', 'k-busy');
+    K.plan = null; fl = null; spin = 0;
+    drawBall(0, SPOT, BALL_R, 1);
+    keepEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
+    ballWrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
+    if (misses >= 2) hintEl.textContent = 'Tip: tap the ball for an easy one';
+    st = 'ready';
+  }
+
+  /* ---------- input ---------- */
+  let pid = null, pts = [];
+  const sample = e => ({ x: (e.clientX - M.left) / M.sc, y: (e.clientY - M.top) / M.sc, t: e.timeStamp || performance.now() });
+  const nudge = () => { st = 'ready'; root.classList.remove('k-busy'); trail.style.opacity = '0'; hintEl.animate([{ transform: 'translate(-50%,-50%)' }, { transform: 'translate(-50%,-70%)' }, { transform: 'translate(-50%,-50%)' }], { duration: 320 }); };
+  root.addEventListener('contextmenu', e => e.preventDefault());
+  root.addEventListener('touchend', unlock, { passive: true });
+  root.addEventListener('pointerdown', e => {
+    unlock();
+    if (e.target.closest && e.target.closest('.k-skip')) return;
+    if (st === 'over'){ finish(); return; }
+    if (st !== 'ready' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault();
+    pid = e.pointerId; pts = [sample(e)];
+    try { root.setPointerCapture(pid); } catch (er) {}
+    st = 'aim'; root.classList.add('k-busy');
+  });
+  root.addEventListener('pointermove', e => {
+    if (st !== 'aim' || e.pointerId !== pid) return;
+    const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+    (evs.length ? evs : [e]).forEach(ev => pts.push(sample(ev)));
+    if (pts.length > 2){ trail.setAttribute('points', pts.slice(-14).map(q => r1(q.x) + ',' + r1(q.y)).join(' ')); trail.style.opacity = '1'; }
+  });
+  root.addEventListener('pointercancel', e => { if (st === 'aim' && e.pointerId === pid) nudge(); });
+  root.addEventListener('pointerup', e => {
+    unlock();
+    if (st !== 'aim' || e.pointerId !== pid) return;
+    const a = pts[0], b = sample(e); pts.push(b);
+    trail.style.opacity = '0';
+    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
+    if (dist < 14){
+      if (RM || Math.hypot(a.x - REST[0], a.y - REST[1]) < 70) autoShot(); else nudge();
+      return;
+    }
+    if (dy > -18 || Math.abs(dx) > 2.6 * -dy){ nudge(); return; }
+    if (RM){ autoShot(); return; }
+    let i = pts.length - 1;
+    while (i > 0 && b.t - pts[i - 1].t <= 110) i--;
+    const w = pts[i];
+    const v = (w !== b && b.t - w.t >= 12) ? Math.hypot(b.x - w.x, b.y - w.y) / (b.t - w.t) : dist / Math.max(16, b.t - a.t);
+    const p = clamp01((v - .35) / 2.1);
+    let dev = 0; const ux = dx / dist, uy = dy / dist;
+    for (const q of pts){ const c = ux * (q.y - a.y) - uy * (q.x - a.x); if (Math.abs(c) > Math.abs(dev)) dev = c; }
+    shoot({ X: AIMK * dx / -dy, Y: BALL_R + Math.pow(p, 1.25) * 2.05 + Math.random() * .1, p, bow: Math.max(-.4, Math.min(.4, dev / dist)) * 5, auto: false });
+  });
+  ballBtn.addEventListener('click', e => { if (e.detail === 0 && st === 'ready'){ unlock(); autoShot(); } });
+  skipBtn.addEventListener('click', () => { unlock(); finish(); });
+  onKey = e => {
+    if (finished) return;
+    if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); finish(); return; }
+    if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') && document.activeElement !== skipBtn){
+      e.preventDefault(); e.stopPropagation(); unlock();
+      if (st === 'over') finish(); else if (st === 'ready') autoShot();
+    }
+  };
+  window.addEventListener('keydown', onKey, true);
+
+  /* ---------- keep the app underneath out of reach until kick-off ---------- */
+  const lockApp = () => {
+    if (finished) return;
+    for (const el of document.body.children){
+      if (el === root || el.tagName === 'SCRIPT' || el.inert) continue;
+      el.inert = true; el.setAttribute('inert', ''); el.setAttribute('data-kinert', '');
+    }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', lockApp); else lockApp();
+
+  /* ---------- go ---------- */
+  drawBall(0, SPOT, BALL_R, 1);
+  drawKeeper(keeperAt(0));
+  if (!RM){
+    let lastT = 0;
+    const frame = t => {
+      raf = requestAnimationFrame(frame);
+      const dt = lastT ? Math.min(50, t - lastT) : 16; lastT = t;
+      const kp = keeperAt(t);
+      drawKeeper(kp);
+      stepBall(t, dt, kp);
+    };
+    raf = requestAnimationFrame(frame);
+  }
+} catch (err) {
+  try { console.error('Kick-off screen failed', err); } catch (e) {}
+  finish(true);
+}
+})();
+</script>
 <div class="app">
   <div class="stick">
     <header class="top">
@@ -1308,13 +1944,16 @@ function parseEntry(text){
 }
 
 /* Apply items to a counts map. mode: got | swap | remove. Returns {prev} of changed ids. */
-function applyToCounts(counts, items, mode){
+/* 'add' sorts for you: the first copy of a card you collect and haven't got goes in your collection,
+   every other copy becomes a swap. collects(id) says whether the card is in a set you collect. */
+function applyToCounts(counts, items, mode, collects){
   const prev = {};
   for (const { id, n } of items){
     const b = counts[id] || 0;
     let a = b;
     if (mode === 'got') a = Math.max(b, n);
     else if (mode === 'swap') a = Math.max(b, 1) + n;
+    else if (mode === 'add') a = (b === 0 && (!collects || collects(id))) ? n : Math.max(b, 1) + n;
     else a = Math.max(0, b - n);
     a = Math.min(a, 99);
     if (a !== b){
@@ -1701,7 +2340,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 function applyItems(items, mode, pid = S.activeId, quiet){
   if (!canWriteActive() && pid === S.activeId){ needJoin(); return 0; }
   const doc = mutable(pid);
-  const prev = applyToCounts(doc.counts, items, mode);
+  const prev = applyToCounts(doc.counts, items, mode, id => { const c = BY_ID.get(id); return !!c && inScope(doc, c); });
   const changed = Object.keys(prev).length;
   if (!changed){ if (!quiet) toast('No change: those cards were already marked'); return 0; }
   S.undo = { pid, prev };
@@ -1775,7 +2414,8 @@ let AC = null;
 const soundOn = () => store.get('sound') !== 'off';
 function audio(){
   try {
-    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    AC = AC || window.GGN_AC || new (window.AudioContext || window.webkitAudioContext)();
+    window.GGN_AC = AC;
     if (AC.state === 'suspended') AC.resume();
     return AC;
   } catch { return null; }
@@ -1800,8 +2440,10 @@ function chime(delay){
     o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + .6);
   });
 }
+const kickActive = () => !!(window.GGN_KICK && window.GGN_KICK.active);
 function celebrate(gave, got, otherName, myName){
   if (!document.body || (!gave.length && !got.length)) return;
+  if (kickActive()){ window.GGN_KICK.onDone(() => celebrate(gave, got, otherName, myName)); return; }
   const old = document.querySelector('.swoosh'); if (old) old.remove();
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const W = innerWidth, H = innerHeight, y = H * .52, xL = W * .2, xR = W * .8;
@@ -1898,6 +2540,8 @@ function renderWho(){
   else if (d) label = (S.activeId !== S.uid ? 'Editing ' : '') + d.nick;
   else if (S.db && S.uid) label = S.readOnly ? 'View only' : 'Join';
   $('#whoName').textContent = label;
+  const mine = isWeb() && S.uid ? getDoc(S.uid) : null;   // remembered for the kick-off screen's "Welcome back"
+  if (mine && mine.nick && mine.nick !== store.get('hello')) store.set('hello', mine.nick);
 }
 function renderNotice(){
   const el = $('#notice');
@@ -2106,10 +2750,22 @@ function renderPhotoPane(){
     <label class="sr" for="aiReply">The AI's reply</label>
     <textarea id="aiReply" rows="3" placeholder="GGN: 12 32x2 45 AK1" spellcheck="false"></textarea>
     <div id="aiPreview" class="preview" aria-live="polite"></div>
-    <div class="sheet-actions"><button type="button" class="btn gold" data-aiadd="swap" disabled>Add as swaps</button><button type="button" class="btn primary" data-aiadd="got" disabled>Add as got</button></div>
+    <div class="sheet-actions"><button type="button" class="btn primary" data-aiadd="add" disabled>Add to my cards</button></div>
+    <p class="help">Sorts them for you: a card you haven't got goes in your collection, and any you already have become swaps. Cards from sets you don't collect go straight to swaps.</p>
+    <div class="row wrap" style="margin-top:6px"><small class="muted">Or:</small><button type="button" class="btn small ghost" data-aiadd="swap" disabled>They're all swaps</button><button type="button" class="btn small ghost" data-aiadd="got" disabled>Just mark as got</button></div>
     <p class="help">Works with free or paid ChatGPT and Claude. Check the list before you add it, because AI can misread cards.</p>`;
   el.innerHTML = html;
   if (keep){ $('#aiReply').value = keep; renderAiPreview(); }
+}
+function splitAdd(doc, items){
+  const keep = [], spare = [];
+  for (const { id, n } of items){
+    const c = BY_ID.get(id); if (!c) continue;
+    const k = cnt(doc, id) === 0 && inScope(doc || EMPTY, c) ? 1 : 0;
+    if (k) keep.push({ id, n: 1 });
+    if (n - k > 0) spare.push({ id, n: n - k });
+  }
+  return { keep, spare };
 }
 function aiSource(text){ const m = String(text || '').match(/GGN:\s*([^\n\r]*)/i); return m ? m[1] : String(text || ''); }
 function renderAiPreview(){
@@ -2118,7 +2774,12 @@ function renderAiPreview(){
   document.querySelectorAll('[data-aiadd]').forEach(b => { b.disabled = !items.length; });
   if (!box.value.trim()){ $('#aiPreview').innerHTML = ''; return; }
   const total = items.reduce((a, b) => a + b.n, 0);
-  $('#aiPreview').innerHTML = (items.length ? `<small class="muted">${plural(total, 'card')} found</small><div class="chips">${items.slice(0, 60).map(({ id, n }) => cardChip(BY_ID.get(id), 'get', n > 1 ? ` ×${n}` : '')).join('')}${items.length > 60 ? `<span class="chip">+${items.length - 60} more</span>` : ''}</div>` : '<p class="flag">No card numbers found. Paste the line that starts with GGN:</p>')
+  const sp = splitAdd(activeDoc(), items);
+  const chipsOf = (list, cls) => `<div class="chips" style="margin-top:6px">${list.slice(0, 60).map(({ id, n }) => cardChip(BY_ID.get(id), cls, n > 1 ? ` ×${n}` : '')).join('')}${list.length > 60 ? `<span class="chip">+${list.length - 60} more</span>` : ''}</div>`;
+  $('#aiPreview').innerHTML = (items.length ? `<small class="muted">${plural(total, 'card')} found</small>`
+      + (sp.keep.length ? `<h4 style="margin-top:10px">For your collection · ${sp.keep.length}</h4>${chipsOf(sp.keep, 'get')}` : '')
+      + (sp.spare.length ? `<h4 style="margin-top:10px">Swaps · ${sp.spare.reduce((a, b) => a + b.n, 0)}</h4>${chipsOf(sp.spare, 'give')}` : '')
+    : '<p class="flag">No card numbers found. Paste the line that starts with GGN:</p>')
     + (bad.length ? `<p class="flag">Not recognised: ${esc(bad.slice(0, 12).join(', '))}</p>` : '');
 }
 function aiPrompt(){
@@ -2350,6 +3011,7 @@ $('#sheet').addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden && !S.sheetLocked) closeSheet(); });
 let toastTimer = null;
 function toast(msg, withUndo){
+  if (kickActive()){ window.GGN_KICK.onDone(() => toast(msg, withUndo)); return; }
   $('#toastMsg').textContent = msg;
   $('#toastUndo').hidden = !withUndo || !S.undo;
   $('#toast').hidden = false;
@@ -2462,7 +3124,8 @@ function openSettings(){
     <div class="setchips">${setChips}</div>
     <label class="f" for="setOther">Other swaps (parallels, autographs, numbered cards)</label>
     <textarea id="setOther" rows="3" maxlength="400" placeholder="e.g. Palmer green /99, Saka PL parallel" ${editable ? '' : 'disabled'}>${esc(d.other || '')}</textarea>
-    <label class="toggle" style="border-top:0;padding-top:0"><input type="checkbox" id="setSound" ${soundOn() ? 'checked' : ''}><span><b>Swoosh sound</b><br><small class="muted">Plays when cards are swapped. This phone only.</small></span></label>
+    <label class="toggle" style="border-top:0;padding-top:0"><input type="checkbox" id="setSound" ${soundOn() ? 'checked' : ''}><span><b>Sounds</b><br><small class="muted">The swoosh when cards are swapped, and the crowd on the kick-off screen. This phone only.</small></span></label>
+    <label class="toggle"><input type="checkbox" id="setKick" ${store.get('kickoff') !== 'off' ? 'checked' : ''}><span><b>Kick-off screen</b><br><small class="muted">Flick a ball into the net each time you open the app. This phone only.</small></span></label>
     <div class="sheet-actions"><button type="button" class="btn primary" id="setSave" ${editable ? '' : 'disabled'}>Save settings</button></div>
     <div class="sheet-actions">
       <button type="button" class="btn small danger" id="clearAll" ${editable ? '' : 'disabled'}>Clear all cards</button>
@@ -2484,6 +3147,7 @@ function openSettings(){
         }
         S.fb.F.signOut(S.fb.auth).then(() => closeSheet()).catch(() => toast("Couldn't sign out"));
       });
+      root.querySelector('#setKick').addEventListener('change', e => store.set('kickoff', e.target.checked ? 'on' : 'off'));
       root.querySelector('#setSound').addEventListener('change', e => { store.set('sound', e.target.checked ? 'on' : 'off'); if (e.target.checked){ audio(); setTimeout(() => whoosh(0, true), 50); } });
       root.querySelector('#setSave').addEventListener('click', () => {
         const doc = mutable(S.activeId);
@@ -2966,8 +3630,13 @@ $('#addPanel').addEventListener('click', e => {
   if (add){
     const { items } = parseEntry(aiSource($('#aiReply').value));
     if (!items.length) return;
+    const sp = add.dataset.aiadd === 'add' ? splitAdd(activeDoc(), items) : null;
     const changed = applyItems(items, add.dataset.aiadd);
-    if (changed){ $('#aiReply').value = ''; renderAiPreview(); renderAll(); showUndoToast(`${plural(changed, 'card')} updated`); }
+    if (changed){
+      $('#aiReply').value = ''; renderAiPreview(); renderAll();
+      const sw = sp ? sp.spare.reduce((a, b) => a + b.n, 0) : 0;
+      showUndoToast(sp ? 'Added ' + [sp.keep.length ? `${plural(sp.keep.length, 'new card')} to your collection` : '', sw ? plural(sw, 'swap') : ''].filter(Boolean).join(' and ') : `${plural(changed, 'card')} updated`);
+    }
   }
 });
 $('#addPanel').addEventListener('input', e => { if (e.target.id === 'aiReply') renderAiPreview(); });
@@ -3106,6 +3775,7 @@ async function onAuth(user){
     if (S.unsub){ S.unsub(); S.unsub = null; }
     Object.assign(S, { uid: null, authUser: null, isOwner: false, adminUid: null, players: {}, local: {}, loaded: false, activeId: null, status: 'signedout', readOnly: false, onboardAsked: false, seenIncoming: null, seenAgreed: null, demo: false, demoPlayers: [] });
     S.dirty.clear(); S.saving.clear(); S.again.clear();
+    try { localStorage.removeItem('ggn.hello'); } catch {}
     renderAll(); openWelcome();
     return;
   }
@@ -3164,6 +3834,10 @@ function subscribe(){
 
 /* ===================== Start ===================== */
 async function init(){
+  if (document.documentElement.classList.contains('kick') && !window.GGN_KICK){
+    document.documentElement.classList.remove('kick');
+    const k = document.getElementById('kick'); if (k) k.remove();
+  }
   S.activeId = null;
   renderAll();
   const cfg = window.GGN_FIREBASE_CONFIG;
