@@ -387,6 +387,16 @@ html.kick #kick{display:block}
 .k-cheer .k-c2{animation:kJump .26s ease-in-out .09s 6 alternate}
 .k-cheer .k-c3{animation:kJump .26s ease-in-out .18s 6 alternate}
 @keyframes kJump{to{transform:translateY(-5px)}}
+.k-game .k-tag{color:#fff;font-weight:700;letter-spacing:.02em}
+.k-over{position:absolute;left:50%;top:44%;z-index:4;width:min(88vw,340px);padding:20px 18px;border-radius:16px;background:rgba(5,11,28,.93);box-shadow:0 18px 50px rgba(0,0,0,.55);text-align:center;transform:translate(-50%,-50%)}
+.k-over-t{margin:0;font:800 34px/1 var(--display);text-transform:uppercase;color:#fff}
+.k-over-s{margin:10px 0 0;font-size:18px;color:#fff}
+.k-over-s b{font:800 30px/1 var(--display);color:#F5C542}
+.k-over-b{margin:6px 0 0;color:rgba(255,255,255,.82)}
+.k-over-a{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px}
+.k-note{position:absolute;left:12px;right:12px;top:calc(env(safe-area-inset-top, 0px) + 10px);z-index:6;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 auto;max-width:440px;padding:8px 8px 8px 14px;border-radius:14px;background:rgba(5,11,28,.94);box-shadow:0 10px 30px rgba(0,0,0,.5);color:#fff;font:700 14px/1.3 var(--body)}
+.k-note[hidden]{display:none}
+.k-note .btn{flex:none}
 @media (max-height:620px){
   .k-head{padding-top:12px}
   .k-logo{width:46px;height:46px;margin-bottom:6px}
@@ -398,6 +408,8 @@ html.kick #kick{display:block}
   .k-hi{font-size:11px}
   .k-title{margin:2px 0 0;font-size:28px}
   .k-tag{display:none}
+  .k-game .k-logo{grid-row:1 / span 3}
+  .k-game .k-tag{display:block;grid-column:2;margin:3px 0 0;font-size:13px}
 }
 @media (prefers-reduced-motion:reduce){
   #kick.k-out{transform:none}
@@ -425,564 +437,751 @@ html.kick #kick{display:block}
   <p class="sr" id="kickLive" role="status" aria-live="polite"></p>
 </div>
 <script>
-/* ===================== Kick-off screen =====================
-   A penalty from behind the ball. Pitch maths in yards: X across (+ right), Z from the goal line
-   towards the camera, Y height. Flick direction picks where the ball goes, flick speed how high,
-   a curved flick bends it. The keeper can save (never the very first time, never twice running). */
+/* ===================== Kick-off screen and goal game =====================
+   Pitch maths in yards: X across (+ right), Z out from the goal line, Y height. The camera always sits
+   just behind the ball looking at the goal, so the ball is bottom-centre and the goal top-centre from
+   any spot. Flick direction picks where the ball goes, flick speed how high, a curved flick bends it.
+   Kick-off: one goal opens the app (the keeper never saves the very first time, never twice running).
+   Goal game: score 3 to go up a level; each level is a new spot and a sharper keeper; 3 misses and
+   it's full time. */
 (() => {
-const html = document.documentElement, root = document.getElementById('kick');
-if (!root) return;
-if (!html.classList.contains('kick')){ root.remove(); return; }
-const queue = [], timers = [];
-let st = 'ready', lastOut = '', finished = false, raf = 0, onKey = null, onResize = null;
-const KICK = window.GGN_KICK = {
-  active: true,
-  onDone(fn){ if (KICK.active) queue.push(fn); else { try { fn(); } catch (e) {} } },
-  state: () => st, outcome: () => lastOut, finish: () => finish()
-};
+const html = document.documentElement;
+const root0 = document.getElementById('kick');
+const SHELL = root0 ? root0.outerHTML : '';
 const ls = {
   get(k){ try { return localStorage.getItem('ggn.' + k); } catch (e) { return null; } },
   set(k, v){ try { localStorage.setItem('ggn.' + k, v); } catch (e) {} }
 };
 const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-function finish(instant){
-  if (finished) return;
-  finished = true; st = 'out';
-  try { sessionStorage.setItem('ggn.kicked', '1'); } catch (e) {}
-  ls.set('kickedBefore', '1');
-  timers.forEach(clearTimeout);
-  cancelAnimationFrame(raf);
-  if (onKey) window.removeEventListener('keydown', onKey, true);
-  if (onResize) window.removeEventListener('resize', onResize);
-  const done = () => {
-    root.remove();
-    html.classList.remove('kick');
-    KICK.active = false;
-    document.querySelectorAll('[data-kinert]').forEach(el => { el.inert = false; el.removeAttribute('inert'); el.removeAttribute('data-kinert'); });
-    const sheet = document.getElementById('sheet');
-    if (sheet && !sheet.hidden){
-      const f = sheet.querySelector('#sheetBody input,#sheetBody textarea,#sheetBody button:not([data-close])') || sheet.querySelector('.closex');
-      if (f) try { f.focus({ preventScroll: true }); } catch (e) {}
-    }
-    queue.splice(0).forEach(fn => { try { fn(); } catch (e) {} });
+const LEVELS = [
+  { x: 0, z: 12, name: 'Penalty spot' },
+  { x: -6, z: 13, name: 'From the left' },
+  { x: 7, z: 14, name: 'From the right' },
+  { x: 0, z: 18, name: 'Edge of the box' },
+  { x: -11, z: 15, name: 'Tight angle' },
+  { x: 10, z: 20, name: 'Long range' },
+  { x: -4, z: 24, name: 'From distance' }
+];
+
+function run(root, mode, opener){
+  const GAME = mode === 'game';
+  const queue = [], timers = [];
+  let st = 'ready', lastOut = '', finished = false, raf = 0, onKey = null, onResize = null;
+  const KICK = window.GGN_KICK = {
+    active: true, mode,
+    onDone(fn){ if (KICK.active) queue.push(fn); else { try { fn(); } catch (e) {} } },
+    state: () => st, outcome: () => lastOut, finish: () => finish()
   };
-  if (instant){ done(); return; }
-  root.classList.add('k-out');
-  setTimeout(done, 400);
-}
-try {
-  const $k = id => document.getElementById(id);
-  const later = (fn, ms) => { timers.push(setTimeout(fn, ms)); };
-  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
-  const ease = q => 1 - Math.pow(1 - q, 3);
-  const lerp = (a, b, q) => a + (b - a) * q;
-  const lerp2 = (a, b, q) => [lerp(a[0], b[0], q), lerp(a[1], b[1], q)];
-  const r1 = n => Math.round(n * 10) / 10, r2 = n => Math.round(n * 100) / 100;
-  const CX = 200, F = 495, CAMZ = 18, CAMH = 4.09, Y0 = 287.5;
-  const P = (X, Z, Y) => { const k = F / (CAMZ - Z); return [CX + X * k, Y0 + (CAMH - (Y || 0)) * k, k]; };
-  const pt = (X, Z, Y) => { const p = P(X, Z, Y); return r1(p[0]) + ',' + r1(p[1]); };
-  const BALL_R = .12, KZ = .6, SPOT = 12, SC = .927;
-  const visR = Z => BALL_R * (1.75 + .85 * clamp01(Z / SPOT));
-  const REST = P(0, SPOT, visR(SPOT));
-  const GL = P(0, 0)[1];
-  const AIMK = (REST[1] - GL) / (F / CAMZ);
-  let seed = 11;
-  const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
-
-  /* ---------- scene ---------- */
-  const SHIRT = ['#C8102E', '#1E4FD8', '#F4F6FA', '#E9AE1C', '#0E7C4A', '#6CABDD', '#7A263A', '#132257', '#EB172B', '#454B5A', '#FF8A00', '#5B2C83'];
-  const SKIN = ['#F1C7A5', '#E0AC82', '#C68B59', '#A0673F', '#7A4A2A', '#5A3720'];
-  const tile = (id, sc) => {
-    let g = '';
-    for (let row = 0; row < 3; row++) for (let i = 0; i < 8; i++){
-      const x = i * 8 + 4 + (rnd() - .5) * 2.4, y = row * 10 + 6 + (rnd() - .5) * 1.6;
-      g += `<ellipse cx="${r1(x)}" cy="${r1(y + 3.3)}" rx="3.3" ry="2.9" fill="${SHIRT[rnd() * SHIRT.length | 0]}"/><circle cx="${r1(x)}" cy="${r1(y - 1)}" r="2" fill="${SKIN[rnd() * SKIN.length | 0]}"/>`;
-    }
-    return `<pattern id="${id}" width="64" height="30" patternUnits="userSpaceOnUse" patternTransform="scale(${sc})"><rect width="64" height="30" fill="#0C1631"/>${g}</pattern>`;
-  };
-  const bTop = P(0, -4, 1)[1], bBot = P(0, -4, 0)[1];
-  const FTL = pt(-4, 0, 2.6), FTR = pt(4, 0, 2.6), FBL = pt(-4, 0, 0), FBR = pt(4, 0, 0);
-  const BTL = pt(-4, -2, 2), BTR = pt(4, -2, 2), BBL = pt(-4, -2, 0), BBR = pt(4, -2, 0);
-  const pent = (cx, cy, r, rot) => { let d = ''; for (let i = 0; i < 5; i++){ const a = rot + i * 1.2566; d += (i ? 'L' : 'M') + r2(cx + Math.cos(a) * r) + ' ' + r2(cy + Math.sin(a) * r); } return d + 'Z'; };
-  let pents = pent(0, 0, .34, -Math.PI / 2), seams = '';
-  for (let i = 0; i < 5; i++){
-    const a = -Math.PI / 2 + Math.PI / 5 + i * 1.2566, b = -Math.PI / 2 + i * 1.2566;
-    pents += pent(Math.cos(a) * .86, Math.sin(a) * .86, .3, a + Math.PI);
-    seams += `M${r2(Math.cos(b) * .34)} ${r2(Math.sin(b) * .34)}L${r2(Math.cos(b) * .66)} ${r2(Math.sin(b) * .66)}`;
+  function finish(instant){
+    if (finished) return;
+    finished = true; st = 'out';
+    if (!GAME){ try { sessionStorage.setItem('ggn.kicked', '1'); } catch (e) {} ls.set('kickedBefore', '1'); }
+    timers.forEach(clearTimeout);
+    cancelAnimationFrame(raf);
+    if (onKey) window.removeEventListener('keydown', onKey, true);
+    if (onResize) window.removeEventListener('resize', onResize);
+    const done = () => {
+      root.remove();
+      html.classList.remove('kick');
+      KICK.active = false;
+      document.querySelectorAll('[data-kinert]').forEach(el => { el.inert = false; el.removeAttribute('inert'); el.removeAttribute('data-kinert'); });
+      const sheet = document.getElementById('sheet');
+      if (sheet && !sheet.hidden){
+        const f = sheet.querySelector('#sheetBody input,#sheetBody textarea,#sheetBody button:not([data-close])') || sheet.querySelector('.closex');
+        if (f) try { f.focus({ preventScroll: true }); } catch (e) {}
+      } else if (opener && opener.focus && document.contains(opener)){ try { opener.focus({ preventScroll: true }); } catch (e) {} }
+      queue.splice(0).forEach(fn => { try { fn(); } catch (e) {} });
+    };
+    if (instant){ done(); return; }
+    root.classList.add('k-out');
+    setTimeout(done, 400);
   }
-  const pl = P(-4.065, 0), pr = P(4.065, 0), bar = P(0, 0, 2.735)[1], pw = 4.4;
-  let s = `<defs>
-    <linearGradient id="kgSky" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="${r1(bTop)}"><stop offset="0" stop-color="#030712"/><stop offset=".6" stop-color="#0A1734"/><stop offset="1" stop-color="#132A5E"/></linearGradient>
-    <linearGradient id="kgShade" gradientUnits="userSpaceOnUse" x1="0" y1="60" x2="0" y2="${r1(bTop)}"><stop offset="0" stop-color="#050B1C"/><stop offset=".45" stop-color="#050B1C" stop-opacity=".74"/><stop offset="1" stop-color="#050B1C" stop-opacity=".05"/></linearGradient>
-    <radialGradient id="kgGlow"><stop offset="0" stop-color="#C5D4FF" stop-opacity=".34"/><stop offset="1" stop-color="#C5D4FF" stop-opacity="0"/></radialGradient>
-    <linearGradient id="kgBoard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A5CF0"/><stop offset="1" stop-color="#173CB0"/></linearGradient>
-    <radialGradient id="kgPitch" gradientUnits="userSpaceOnUse" cx="200" cy="470" r="470"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></radialGradient>
-    <pattern id="kpNet" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H6M0 0V6" stroke="#fff" stroke-width=".6" fill="none"/></pattern>
-    <radialGradient id="kgBall" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#EEF1F6"/><stop offset="1" stop-color="#B4BDCC"/></radialGradient>
-    <radialGradient id="kgBallSh" cx=".4" cy=".35" r=".75"><stop offset=".6" stop-color="#0F1B34" stop-opacity="0"/><stop offset="1" stop-color="#0F1B34" stop-opacity=".35"/></radialGradient>
-    <clipPath id="kcBall"><circle r="1"/></clipPath>
-    ${tile('kpC1', 1)}${tile('kpC2', .84)}${tile('kpC3', .7)}
-  </defs>
-  <rect x="-2400" y="-1600" width="5200" height="${r1(1600 + bTop)}" fill="url(#kgSky)"/>
-  <g class="k-crowd"><rect class="k-c3" x="-2400" y="148" width="5200" height="84" fill="url(#kpC3)"/><rect class="k-c2" x="-2400" y="226" width="5200" height="78" fill="url(#kpC2)"/><rect class="k-c1" x="-2400" y="298" width="5200" height="${r1(bTop - 298 + 10)}" fill="url(#kpC1)"/></g>
-  <rect x="-2400" y="-1600" width="5200" height="${r1(1600 + bTop)}" fill="url(#kgShade)"/>
-  <circle cx="-10" cy="150" r="190" fill="url(#kgGlow)"/><circle cx="410" cy="150" r="190" fill="url(#kgGlow)"/>
-  <g id="kPops"></g>
-  <rect x="-2400" y="${r1(bTop)}" width="5200" height="${r1(bBot - bTop)}" fill="url(#kgBoard)"/>
-  <rect x="-2400" y="${r1(bTop)}" width="5200" height="1" fill="#fff" opacity=".28"/>
-  <text class="k-board" x="-1300" y="${r1(bBot - (bBot - bTop) * .3)}">${'GOT GOT NEED · SWAP YOUR SPARES · '.repeat(24)}</text>
-  <rect x="-2400" y="${r1(bBot)}" width="5200" height="2600" fill="#2E8C3C"/>`;
-  for (let z = -4, i = 0; z < 16; z += 2, i++){
-    if (i % 2) continue;
-    const y1 = P(0, z)[1], y2 = P(0, z + 2)[1];
-    s += `<rect x="-2400" y="${r1(y1)}" width="5200" height="${r1(y2 - y1)}" fill="#37A048"/>`;
-  }
-  const spot = P(0, SPOT);
-  s += `<rect x="-2400" y="${r1(bBot)}" width="5200" height="2600" fill="url(#kgPitch)"/>
-  <g fill="none" stroke="#F2F7F0" stroke-opacity=".85" stroke-width="1.6" stroke-linecap="round">
-    <path d="M-2400 ${r1(GL)}H2800"/>
-    <path d="M${pt(-10, 0)}L${pt(-10, 6)}L${pt(10, 6)}L${pt(10, 0)}"/>
-    <path d="M${pt(-22, 0)}L${pt(-22, 15)}M${pt(22, 0)}L${pt(22, 15)}"/>
-  </g>
-  <ellipse cx="${r1(spot[0])}" cy="${r1(spot[1])}" rx="4.6" ry="1.7" fill="#F2F7F0" opacity=".9"/>
-  <g id="kNet">
-    <polygon points="${BTL} ${BTR} ${BBR} ${BBL}" fill="#061024" fill-opacity=".22"/>
-    <polygon points="${FTL} ${BTL} ${BBL} ${FBL}" fill="#061024" fill-opacity=".14"/>
-    <polygon points="${FTR} ${BTR} ${BBR} ${FBR}" fill="#061024" fill-opacity=".14"/>
-    <polygon points="${BTL} ${BTR} ${BBR} ${BBL}" fill="url(#kpNet)" opacity=".75"/>
-    <polygon points="${FTL} ${BTL} ${BBL} ${FBL}" fill="url(#kpNet)" opacity=".55"/>
-    <polygon points="${FTR} ${BTR} ${BBR} ${FBR}" fill="url(#kpNet)" opacity=".55"/>
-    <path d="M${BTL}L${BTR}M${BTL}L${BBL}M${BTR}L${BBR}M${pt(-4.065, 0, 0)}L${BBL}M${pt(4.065, 0, 0)}L${BBR}" stroke="#DDE4EF" stroke-width="1.2" fill="none" opacity=".85"/>
-  </g>
-  <g id="kSlotA"></g>
-  <g id="kRoof">
-    <polygon points="${FTL} ${FTR} ${BTR} ${BTL}" fill="#061024" fill-opacity=".2"/>
-    <polygon points="${FTL} ${FTR} ${BTR} ${BTL}" fill="url(#kpNet)" opacity=".7"/>
-    <path d="M${pt(-4.065, 0, 2.67)}L${BTL}M${pt(4.065, 0, 2.67)}L${BTR}" stroke="#DDE4EF" stroke-width="1.2" fill="none" opacity=".85"/>
-  </g>
-  <g fill="#fff">
-    <rect x="${r1(pl[0] - pw / 2)}" y="${r1(bar)}" width="${pw}" height="${r1(GL - bar)}" rx="1.4"/>
-    <rect x="${r1(pr[0] - pw / 2)}" y="${r1(bar)}" width="${pw}" height="${r1(GL - bar)}" rx="1.4"/>
-    <rect x="${r1(pl[0] - pw / 2)}" y="${r1(bar)}" width="${r1(pr[0] - pl[0] + pw)}" height="${pw}" rx="1.4"/>
-    <rect x="${r1(pl[0] + pw / 2 - 1.3)}" y="${r1(bar + pw)}" width="1.3" height="${r1(GL - bar - pw)}" fill="#C9D3E3"/>
-    <rect x="${r1(pr[0] + pw / 2 - 1.3)}" y="${r1(bar + pw)}" width="1.3" height="${r1(GL - bar - pw)}" fill="#C9D3E3"/>
-    <rect x="${r1(pl[0] + pw / 2)}" y="${r1(bar + pw - 1.2)}" width="${r1(pr[0] - pl[0] - pw)}" height="1.2" fill="#C9D3E3"/>
-  </g>
-  <g id="kSlotB"></g>
-  <ellipse id="kKSh" fill="#000" opacity=".28"/>
-  <g id="kKeep"><g>
-    <path d="M-.12 -.94L-.23 -.08M.12 -.94L.23 -.08" stroke="#14203F" stroke-width=".18" stroke-linecap="round" fill="none"/>
-    <path d="M-.215 -.36L-.23 -.1M.215 -.36L.23 -.1" stroke="#FF8A00" stroke-width=".19" stroke-linecap="round" fill="none"/>
-    <ellipse cx="-.26" cy="-.035" rx=".12" ry=".05" fill="#0B0F18"/><ellipse cx=".26" cy="-.035" rx=".12" ry=".05" fill="#0B0F18"/>
-    <path d="M-.28 -1.04H.28L.31 -.74H.03L0 -.82L-.03 -.74H-.31Z" fill="#14203F"/>
-    <line id="kArmL" x1="-.26" y1="-1.5" x2="-.74" y2="-1.12" stroke="#FF8A00" stroke-width=".16" stroke-linecap="round"/>
-    <line id="kArmR" x1=".26" y1="-1.5" x2=".74" y2="-1.12" stroke="#FF8A00" stroke-width=".16" stroke-linecap="round"/>
-    <path d="M-.31 -1.62Q0 -1.69 .31 -1.62L.28 -.98H-.28Z" fill="#FF8A00"/>
-    <path d="M-.3 -1.38H.3" stroke="#14203F" stroke-width=".06" opacity=".4"/>
-    <rect x="-.065" y="-1.74" width=".13" height=".12" fill="#B9794C"/>
-    <circle cy="-1.86" r=".165" fill="#C68B59"/>
-    <path d="M-.165 -1.87A.165 .165 0 0 1 .165 -1.87Q.05 -1.95 -.165 -1.87Z" fill="#2B1D14"/>
-    <circle id="kGlL" cx="-.74" cy="-1.12" r=".14" fill="#F4F6FA" stroke="#1E4FD8" stroke-width=".05"/>
-    <circle id="kGlR" cx=".74" cy="-1.12" r=".14" fill="#F4F6FA" stroke="#1E4FD8" stroke-width=".05"/>
-  </g></g>
-  <g class="k-chev">${[548, 528, 508].map(y => `<path d="M190 ${y + 5}L200 ${y - 5}L210 ${y + 5}"/>`).join('')}</g>
-  ${RM ? '' : `<circle class="k-ring" cx="${r1(REST[0])}" cy="${r1(REST[1])}" r="26" fill="none" stroke="#fff" stroke-width="2" opacity="0"><animate attributeName="r" values="26;46" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values=".7;0" dur="1.8s" repeatCount="indefinite"/></circle>`}
-  <g id="kSlotC"><g id="kBallWrap"><ellipse id="kBallSh" fill="#000"/><g id="kBall"><circle r="1" fill="url(#kgBall)"/><g clip-path="url(#kcBall)"><g id="kSpin"><path d="${pents}" fill="#1A2236"/><path d="${seams}" stroke="#7D879B" stroke-width=".05" fill="none"/></g></g><circle r="1" fill="url(#kgBallSh)"/><circle r="1" fill="none" stroke="#0F1B34" stroke-opacity=".3" stroke-width=".05"/></g></g></g>
-  <polyline id="kTrail" points="" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" style="opacity:0"/>`;
-  const svg = $k('kickSvg');
-  svg.innerHTML = s;
-
-  const stage = $k('kickStage'), hintEl = $k('kickHint'), sayEl = $k('kickSay'), goalEl = $k('kickGoal'), liveEl = $k('kickLive');
-  const ballBtn = $k('kickBall'), skipBtn = $k('kickSkip'), flashEl = $k('kickFlash');
-  const slotA = $k('kSlotA'), slotB = $k('kSlotB'), slotC = $k('kSlotC');
-  const ballWrap = $k('kBallWrap'), ballEl = $k('kBall'), spinEl = $k('kSpin'), ballSh = $k('kBallSh');
-  const keepEl = $k('kKeep'), kSh = $k('kKSh'), armL = $k('kArmL'), armR = $k('kArmR'), glL = $k('kGlL'), glR = $k('kGlR');
-  const netEls = [$k('kNet'), $k('kRoof')], trail = $k('kTrail'), pops = $k('kPops');
-  const attr = (el, o) => { for (const k in o) el.setAttribute(k, o[k]); };
-
-  const hello = ls.get('hello');
-  if (hello) $k('kickHi').textContent = 'Welcome back, ' + hello;
   try {
-    const u = new URL(location.href), gn = (u.searchParams.get('gn') || '').replace(/\s+/g, ' ').trim().slice(0, 24);
-    if (u.searchParams.get('g') && gn) $k('kickHi').textContent = "You're invited to " + gn;
-  } catch (e) {}
-  const fine = !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches);
-  const HINT = RM ? 'Tap the ball to kick off' : fine ? 'Drag and flick the ball into the net' : 'Flick the ball into the net to kick off';
-  hintEl.textContent = HINT;
+    const $k = id => document.getElementById(id);
+    const later = (fn, ms) => { timers.push(setTimeout(fn, ms)); };
+    const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+    const ease = q => 1 - Math.pow(1 - q, 3);
+    const lerp = (a, b, q) => a + (b - a) * q;
+    const lerp2 = (a, b, q) => [lerp(a[0], b[0], q), lerp(a[1], b[1], q)];
+    const r1 = n => Math.round(n * 10) / 10, r2 = n => Math.round(n * 100) / 100;
 
-  /* ---------- layout: the stage box sits exactly over the 400×700 drawing ---------- */
-  let M = { sc: 1, left: 0, top: 0 };
-  function layout(){
-    const W = root.clientWidth || innerWidth, H = root.clientHeight || innerHeight;
-    const sc = Math.min(H / 700, W / 400 * 1.25);   // tall phones: fill the height, trim a little off the sides
-    M = { sc, left: (W - 400 * sc) / 2, top: H - 700 * sc };
-    svg.setAttribute('viewBox', `${r2(-M.left / sc)} ${r2(-M.top / sc)} ${r2(W / sc)} ${r2(H / sc)}`);
-    const st2 = stage.style;
-    st2.left = M.left + 'px'; st2.top = M.top + 'px'; st2.width = 400 * sc + 'px'; st2.height = 700 * sc + 'px';
-    st2.setProperty('--sc', sc.toFixed(3));
-    const d = Math.max(60, 76 * sc);
-    ballBtn.style.width = ballBtn.style.height = d + 'px';
-    ballBtn.style.top = (REST[1] / 7) + '%';
-  }
-  layout();
-  onResize = () => layout();
-  window.addEventListener('resize', onResize);
-
-  /* ---------- sound (made on the fly; the Sounds switch in Settings turns it off) ---------- */
-  let ac = null, noise = null;
-  function unlock(){
-    try {
-      if (!ac) ac = window.GGN_AC || new (window.AudioContext || window.webkitAudioContext)();
-      window.GGN_AC = ac;
-      if (ac.state === 'suspended') ac.resume();
-    } catch (e) { ac = null; }
-  }
-  // sounds queued while the phone is still waking the audio up play as soon as it's ready
-  const A = () => (ac && ac.state !== 'closed' && ls.get('sound') !== 'off') ? ac : null;
-  const noiseSrc = a => {
-    if (!noise){ noise = a.createBuffer(1, a.sampleRate * 2, a.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
-    const n = a.createBufferSource(); n.buffer = noise; return n;
-  };
-  const envOut = (a, t0, peak, att, dec) => { const g = a.createGain(); g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + att); g.gain.exponentialRampToValueAtTime(.0001, t0 + att + dec); g.connect(a.destination); return g; };
-  const filt = (a, type, f, q) => { const b = a.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q) b.Q.value = q; return b; };
-  function sKick(p){
-    const a = A(); if (!a) return; const t = a.currentTime;
-    const o = a.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + .14);
-    o.connect(envOut(a, t, .6 * (.65 + .35 * p), .006, .18)); o.start(t); o.stop(t + .22);
-    const n = noiseSrc(a), lp = filt(a, 'lowpass', 1600); n.connect(lp); lp.connect(envOut(a, t, .3, .002, .05)); n.start(t); n.stop(t + .07);
-  }
-  function sSwish(){ const a = A(); if (!a) return; const t = a.currentTime; const n = noiseSrc(a), hp = filt(a, 'highpass', 2200); n.connect(hp); hp.connect(envOut(a, t, .14, .03, .3)); n.start(t); n.stop(t + .4); }
-  function sCheer(){
-    const a = A(); if (!a) return; const t = a.currentTime, dur = 2.6;
-    const n = noiseSrc(a); n.loop = true;
-    const b1 = filt(a, 'bandpass', 850, .8), b2 = filt(a, 'bandpass', 2100, 1.2);
-    const trem = a.createGain(); trem.gain.value = .8;
-    const lfo = a.createOscillator(); lfo.frequency.value = 7; const lg = a.createGain(); lg.gain.value = .2; lfo.connect(lg); lg.connect(trem.gain);
-    const g = a.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.26, t + .35); g.gain.setValueAtTime(.26, t + .9); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-    n.connect(b1); n.connect(b2); b1.connect(trem); b2.connect(trem); trem.connect(g); g.connect(a.destination);
-    n.start(t); n.stop(t + dur); lfo.start(t); lfo.stop(t + dur);
-  }
-  function sOoh(){
-    const a = A(); if (!a) return; const t = a.currentTime;
-    const n = noiseSrc(a), b1 = filt(a, 'bandpass', 520, 4), b2 = filt(a, 'bandpass', 950, 5);
-    b1.frequency.exponentialRampToValueAtTime(330, t + .9); b2.frequency.exponentialRampToValueAtTime(700, t + .9);
-    const g = envOut(a, t, .3, .22, .9); n.connect(b1); n.connect(b2); b1.connect(g); b2.connect(g); n.start(t); n.stop(t + 1.2);
-  }
-  function sClang(){
-    const a = A(); if (!a) return; const t = a.currentTime;
-    [[1180, .16], [1770, .09], [2630, .05]].forEach(([fr, v]) => { const o = a.createOscillator(); o.type = 'triangle'; o.frequency.value = fr; o.connect(envOut(a, t, v, .003, .8)); o.start(t); o.stop(t + .85); });
-  }
-  function sGlove(){ const a = A(); if (!a) return; const t = a.currentTime; const n = noiseSrc(a), lp = filt(a, 'lowpass', 700); n.connect(lp); lp.connect(envOut(a, t, .5, .004, .12)); n.start(t); n.stop(t + .16); }
-
-  /* ---------- keeper ---------- */
-  const K = { x: 0, plan: null };
-  const IDLE_L = [-.74, 1.12], IDLE_R = [.74, 1.12];
-  function keeperAt(t){
-    if (!K.plan){
-      const ph = t / 1800 * 2 * Math.PI;
-      const x = RM ? 0 : .85 * Math.sin(ph), lean = RM ? 0 : Math.cos(ph) * .06;
-      K.x = x;
-      return { X: x, jump: RM ? 0 : Math.abs(Math.sin(t / 300)) * .04, ang: 0, hands: [[IDLE_L[0], IDLE_L[1] + lean], [IDLE_R[0], IDLE_R[1] - lean]] };
+    /* ---------- camera ---------- */
+    const CX = 200, F = 495, CAMH = 4.09, Y0 = 287.5, BACK = 6, NEAR = .6, BALL_R = .12, KZ = .6;
+    let cam = null, BS = LEVELS[0], START = 12, SCE = .9375, SC = .927;
+    function setSpot(sp){
+      BS = sp; START = Math.hypot(sp.x, sp.z) || 12;
+      const ux = sp.x / START, uz = sp.z / START;
+      cam = { x: sp.x + ux * BACK, z: sp.z + uz * BACK, fx: -ux, fz: -uz };
+      SCE = clamp01(1 - .75 / sp.z);
+      SC = (1.15 - Math.sqrt(1.3225 - .6 * SCE)) / .3;
     }
-    const p = K.plan;
-    if (p.kind === 'watch') return { X: p.x, jump: 0, ang: 0, hands: [[-.6, 1.02], [.6, 1.02]] };
-    const q = ease(clamp01((t - p.t0) / p.dur)), qa = Math.min(1, q * 1.5);
-    let slide = p.slide * q, jump = p.jump * Math.sin(q * Math.PI / 2), ang = p.ang * q;
-    let hands = [lerp2(IDLE_L, p.hands[0], qa), lerp2(IDLE_R, p.hands[1], qa)];
-    if (p.kind === 'dive' && t > p.t0 + p.dur + 140){
-      const fq = ease(clamp01((t - p.t0 - p.dur - 140) / 320)), sg = p.ang < 0 ? -1 : 1;
-      ang = lerp(p.ang, sg * 1.5, fq); jump = p.jump * (1 - fq); slide = p.slide + sg * .15 * fq;
-    }
-    if (p.kind === 'catch' && p.tc && t > p.tc){
-      const cq = ease(clamp01((t - p.tc) / 260));
-      hands = [lerp2(p.hands[0], [-.14, 1.3], cq), lerp2(p.hands[1], [.14, 1.3], cq)];
-      jump = p.jump * (1 - cq);
-    }
-    return { X: p.x + slide, jump, ang, hands };
-  }
-  const handsWorld = kp => { const c = Math.cos(kp.ang), sn = Math.sin(kp.ang); return kp.hands.map(h => [kp.X + h[0] * c + h[1] * sn, kp.jump + h[1] * c - h[0] * sn]); };
-  function drawKeeper(kp){
-    const [fx, fy, k] = P(kp.X, KZ, kp.jump);
-    keepEl.setAttribute('transform', `translate(${r2(fx)} ${r2(fy)}) scale(${r2(k)}) rotate(${r1(kp.ang * 57.296)})`);
-    const [l, r] = kp.hands;
-    attr(armL, { x2: r2(l[0]), y2: r2(-l[1]) }); attr(glL, { cx: r2(l[0]), cy: r2(-l[1]) });
-    attr(armR, { x2: r2(r[0]), y2: r2(-r[1]) }); attr(glR, { cx: r2(r[0]), cy: r2(-r[1]) });
-    const lean = Math.sin(kp.ang), g = P(kp.X + lean * .9, KZ, 0);
-    attr(kSh, { cx: r2(g[0]), cy: r2(g[1]), rx: r2(k * (.5 + Math.abs(lean) * .85)), ry: r2(k * .11) });
-  }
-  // hands meet the ball at (Xb, Yb): push off sideways, jump for high ones, stretch along the body
-  function solveDive(Xk, Xb, Yb){
-    const d = Xb - Xk, sg = d < 0 ? -1 : 1;
-    const slide = sg * Math.min(1.3, Math.max(.3, Math.abs(d) - 2));
-    const jump = Math.min(.55, Math.max(0, (Yb - 1.2) * .5));
-    const dx = Xb - (Xk + slide), up = Math.max(.15, Yb - jump);
-    const L = Math.hypot(dx, up);
-    return { slide, jump, ang: Math.atan2(dx, up), L, hands: [[-.12, L], [.12, L]] };
-  }
-
-  /* ---------- ball ---------- */
-  let fl = null, spin = 0, misses = 0, lastSaved = false, slotNow = slotC;
-  const firstEver = ls.get('kickedBefore') !== '1';
-  const E = s2 => s2 * (1.15 - .15 * s2);
-  const trueAt = (sh, A2, e) => [sh.X * e + sh.bow * 4 * e * (1 - e), SPOT - SPOT * e, BALL_R + (sh.Y - BALL_R) * e + A2 * 4 * e * (1 - e)];
-  function drawBall(X, Z, Y, alpha){
-    const vr = visR(Z), b = P(X, Z, Y - BALL_R + vr), r = vr * b[2];
-    ballEl.setAttribute('transform', `translate(${r2(b[0])} ${r2(b[1])}) scale(${r2(r)})`);
-    spinEl.setAttribute('transform', `rotate(${r1(spin % 360)})`);
-    const g = P(X, Z, 0), hgt = Math.max(0, Y - BALL_R), sr = r * 1.05 / (1 + hgt * .6);
-    attr(ballSh, { cx: r2(g[0]), cy: r2(g[1]), rx: r2(sr), ry: r2(sr * .3), opacity: r2(.38 / (1 + hgt * 1.4)) });
-    ballWrap.style.opacity = alpha;
-    const slot = Z >= KZ - .05 ? slotC : Z >= 0 ? slotB : slotA;
-    if (slot !== slotNow){ slot.appendChild(ballWrap); slotNow = slot; }
-  }
-  function stepBall(t, dt, kp){
-    const f = fl; if (!f) return;
-    spin += dt * f.spin;
-    if (f.phase !== 'fly') f.spin *= .9;
-    let X, Z, Y, alpha = 1;
-    if (f.phase === 'fly'){
-      const q = clamp01((t - f.t0) / f.T);
-      if (f.out === 'save' && q >= SC){
-        f.phase = K.plan && K.plan.kind === 'catch' ? 'held' : 'parry'; f.t1 = t; f.c = trueAt(f.sh, f.A, E(SC));
-        if (K.plan) K.plan.tc = t;
-        sGlove();
-        later(() => missed('save'), f.phase === 'held' ? 450 : 380);
-      } else if (q >= 1){
-        f.t1 = t; f.c = trueAt(f.sh, f.A, 1);
-        if (f.out === 'goal'){ f.phase = 'net'; goal(false); }
-        else if (f.out === 'postin'){ f.phase = 'postin'; sClang(); goal(true); }
-        else if (f.out === 'postout'){ f.phase = 'postout'; sClang(); later(() => missed('post'), 450); }
-        else { f.phase = 'wide'; later(() => missed('wide'), 420); }
+    const depthOf = (X, Z) => (X - cam.x) * cam.fx + (Z - cam.z) * cam.fz;
+    const P = (X, Z, Y) => {
+      const dx = X - cam.x, dz = Z - cam.z, k = F / Math.max(.05, dx * cam.fx + dz * cam.fz);
+      return [CX + (dz * cam.fx - dx * cam.fz) * k, Y0 + (CAMH - (Y || 0)) * k, k];
+    };
+    const pt = (X, Z, Y) => { const p = P(X, Z, Y); return r1(p[0]) + ',' + r1(p[1]); };
+    const STAND = t => [-4.6 - 25.4 * t, 1 + 16.6 * t];   // [Z, Y] up the rake of the stand behind the goal
+    const visR = prog => BALL_R * (1.75 + .85 * (1 - clamp01(prog)));
+    setSpot(LEVELS[0]);
+    const REST = P(BS.x, BS.z, visR(0));   // the same for every spot: the camera is always just behind the ball
+    function clipPoly(pts){
+      const out = [];
+      for (let i = 0; i < pts.length; i++){
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        const da = depthOf(a[0], a[1]) - NEAR, db = depthOf(b[0], b[1]) - NEAR;
+        if (da >= 0) out.push(a);
+        if ((da >= 0) !== (db >= 0)){ const t = da / (da - db); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, (a[2] || 0) + ((b[2] || 0) - (a[2] || 0)) * t]); }
       }
-      if (f.phase === 'fly') [X, Z, Y] = trueAt(f.sh, f.A, E(q));
+      return out;
     }
-    if (f.phase !== 'fly'){
-      const c = f.c, u = t - f.t1, sg = c[0] < 0 ? -1 : 1;
-      if (f.phase === 'net' || f.phase === 'postin'){
-        const dur = f.phase === 'postin' ? 200 : 150, tx = f.phase === 'postin' ? sg * 3.1 : c[0] * 1.06, q = clamp01(u / dur);
-        X = lerp(c[0], tx, q); Z = lerp(0, -1.75, q); Y = lerp(c[2], c[2] * .8, q);
-        if (u > dur){ const d = clamp01((u - dur) / 300); Y = lerp(c[2] * .8, BALL_R, d * d); }
-      } else if (f.phase === 'postout'){
-        const q = clamp01(u / 560);
-        X = c[0] + sg * 1.6 * q; Z = 3.2 * q; Y = Math.max(BALL_R, c[2] + 1.2 * q - 2.6 * q * q); alpha = 1 - clamp01((q - .55) / .45);
-      } else if (f.phase === 'wide'){
-        const q = clamp01(u / 260);
-        X = c[0] * (1 + .3 * q); Z = -3.6 * q; Y = c[2] * (1 - .1 * q);
-        if (u > 260){ const d = clamp01((u - 260) / 300); Y = lerp(c[2] * .9, BALL_R, d); alpha = 1 - d; }
-      } else if (f.phase === 'parry'){
-        const q = clamp01(u / 620), pg = (c[0] - (K.plan ? K.plan.x : 0)) < 0 ? -1 : 1;
-        X = c[0] + pg * 3.4 * ease(q); Z = c[1] - 2.6 * q; Y = Math.max(BALL_R, c[2] + .9 * q - 1.6 * q * q); alpha = 1 - clamp01((q - .5) / .5);
-      } else {
-        const hw = handsWorld(kp); X = (hw[0][0] + hw[1][0]) / 2; Y = Math.max(BALL_R, (hw[0][1] + hw[1][1]) / 2); Z = KZ + .15;
-      }
+    const poly = (pts, attrs) => { const c = clipPoly(pts); return c.length < 3 ? '' : `<polygon points="${c.map(p => pt(p[0], p[1], p[2])).join(' ')}" ${attrs}/>`; };
+    function seg(a, b){
+      a = [a[0], a[1], a[2] || 0]; b = [b[0], b[1], b[2] || 0];
+      const da = depthOf(a[0], a[1]) - NEAR, db = depthOf(b[0], b[1]) - NEAR;
+      if (da < 0 && db < 0) return '';
+      const cut = (p, q, dp, dq) => { const t = dp / (dp - dq); return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t]; };
+      if (da < 0) a = cut(a, b, da, db); else if (db < 0) b = cut(a, b, da, db);
+      return `M${pt(a[0], a[1], a[2])}L${pt(b[0], b[1], b[2])}`;
     }
-    drawBall(X, Z, Y, alpha);
-  }
 
-  /* ---------- shots ---------- */
-  function canReach(sh, A2){
-    if (Math.abs(sh.X) > 2.9 && sh.Y > 1.75) return false;           // top corners: unstoppable
-    const c = trueAt(sh, A2, E(SC));
-    return solveDive(K.x, c[0], c[2]).L <= 2.65;
-  }
-  function planKeeper(sh, out, A2, tStart, tContact){
-    const Xk = K.x, dur = Math.max(200, tContact - tStart);
-    if (out === 'wide'){ K.plan = { kind: 'watch', x: Xk }; return; }
-    let tx = sh.X, ty = sh.Y;
-    if (out === 'save'){
+    /* ---------- scene ---------- */
+    let seed = 11;
+    const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+    const SHIRT = ['#C8102E', '#1E4FD8', '#F4F6FA', '#E9AE1C', '#0E7C4A', '#6CABDD', '#7A263A', '#132257', '#EB172B', '#454B5A', '#FF8A00', '#5B2C83'];
+    const SKIN = ['#F1C7A5', '#E0AC82', '#C68B59', '#A0673F', '#7A4A2A', '#5A3720'];
+    const tile = (id, sc) => {
+      let g = '';
+      for (let row = 0; row < 3; row++) for (let i = 0; i < 8; i++){
+        const x = i * 8 + 4 + (rnd() - .5) * 2.4, y = row * 10 + 6 + (rnd() - .5) * 1.6;
+        g += `<ellipse cx="${r1(x)}" cy="${r1(y + 3.3)}" rx="3.3" ry="2.9" fill="${SHIRT[rnd() * SHIRT.length | 0]}"/><circle cx="${r1(x)}" cy="${r1(y - 1)}" r="2" fill="${SKIN[rnd() * SKIN.length | 0]}"/>`;
+      }
+      return `<pattern id="${id}" width="64" height="30" patternUnits="userSpaceOnUse" patternTransform="scale(${sc})"><rect width="64" height="30" fill="#0C1631"/>${g}</pattern>`;
+    };
+    const pent = (cx, cy, r, rot) => { let d = ''; for (let i = 0; i < 5; i++){ const a = rot + i * 1.2566; d += (i ? 'L' : 'M') + r2(cx + Math.cos(a) * r) + ' ' + r2(cy + Math.sin(a) * r); } return d + 'Z'; };
+    let pents = pent(0, 0, .34, -Math.PI / 2), seams = '';
+    for (let i = 0; i < 5; i++){
+      const a = -Math.PI / 2 + Math.PI / 5 + i * 1.2566, b = -Math.PI / 2 + i * 1.2566;
+      pents += pent(Math.cos(a) * .86, Math.sin(a) * .86, .3, a + Math.PI);
+      seams += `M${r2(Math.cos(b) * .34)} ${r2(Math.sin(b) * .34)}L${r2(Math.cos(b) * .66)} ${r2(Math.sin(b) * .66)}`;
+    }
+    function buildScene(){
+      seed = 11;
+      const straight = Math.abs(cam.fx) < .02;
+      // board top and bottom straight behind the goal (always the middle of the screen)
+      const bTop = P(0, -4, 1)[1], bBot = P(0, -4, 0)[1];
+      // the stands: three tiers raked up behind the boards, drawn in perspective so they follow the angle
+      const tiers = [['k-c3', 'kpC3', .44, 1], ['k-c2', 'kpC2', .16, .44], ['k-c1', 'kpC1', -1, .16]].map(([cls, pat, t0, t1]) => {
+        const a = t0 < 0 ? [-4.2, .4] : STAND(t0), b = STAND(t1);
+        return poly([[-150, a[0], a[1]], [150, a[0], a[1]], [150, b[0], b[1]], [-150, b[0], b[1]]], `class="${cls}" fill="url(#${pat})"`);
+      }).join('');
+      // words along the boards when they're at an angle: each one sized and sloped to its bit of board
+      let boardTxt = '';
+      if (!straight) for (let X = -150, i = 0; X < 150; i++){
+        const w = i % 2 ? 'SWAP YOUR SPARES' : 'GOT GOT NEED', x0 = X, x1 = X + (i % 2 ? 6.1 : 4.6);
+        X = x1 + 1.2;
+        if (depthOf(x0, -4) < 4 || depthOf(x1, -4) < 4) continue;
+        const a = P(x0, -4, .3), b = P(x1, -4, .3), span = b[0] - a[0];
+        if (span < 8) continue;
+        boardTxt += `<text class="k-board" transform="matrix(1 ${(b[1] - a[1]) / span} 0 1 ${r1(a[0])} ${r1(a[1])})" textLength="${r1(span)}" lengthAdjust="spacingAndGlyphs" style="font-size:${r1(.5 * P((x0 + x1) / 2, -4, 0)[2])}px">${w}</text>`;
+      }
+      const FTL = pt(-4, 0, 2.6), FTR = pt(4, 0, 2.6), FBL = pt(-4, 0, 0), FBR = pt(4, 0, 0);
+      const BTL = pt(-4, -2, 2), BTR = pt(4, -2, 2), BBL = pt(-4, -2, 0), BBR = pt(4, -2, 0);
+      const kGoal = P(0, 0)[2], pw = Math.max(2.4, .13 * kGoal * 1.25);
+      let stripes = '';
+      for (let z = -4, i = 0; z < 90; z += 2, i++) if (!(i % 2)) stripes += poly([[-150, z, 0], [150, z, 0], [150, z + 2, 0], [-150, z + 2, 0]], 'fill="#37A048"');
+      const lines = [seg([-90, 0], [90, 0])];
+      [[[-10, 0], [-10, 6]], [[-10, 6], [10, 6]], [[10, 6], [10, 0]], [[-22, 0], [-22, 18]], [[-22, 18], [22, 18]], [[22, 18], [22, 0]]].forEach(([a, b]) => lines.push(seg(a, b)));
+      for (let i = 0; i < 16; i++){ const a1 = -.9273 + i * .1159, a2 = a1 + .1159; lines.push(seg([10 * Math.sin(a1), 12 + 10 * Math.cos(a1)], [10 * Math.sin(a2), 12 + 10 * Math.cos(a2)])); }
+      const sp = depthOf(0, 12) > NEAR ? P(0, 12) : null;
+      return `<defs>
+        <linearGradient id="kgSky" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="${r1(bTop)}"><stop offset="0" stop-color="#030712"/><stop offset=".6" stop-color="#0A1734"/><stop offset="1" stop-color="#132A5E"/></linearGradient>
+        <linearGradient id="kgShade" gradientUnits="userSpaceOnUse" x1="0" y1="60" x2="0" y2="${r1(bTop)}"><stop offset="0" stop-color="#050B1C"/><stop offset=".45" stop-color="#050B1C" stop-opacity=".74"/><stop offset="1" stop-color="#050B1C" stop-opacity=".05"/></linearGradient>
+        <radialGradient id="kgGlow"><stop offset="0" stop-color="#C5D4FF" stop-opacity=".34"/><stop offset="1" stop-color="#C5D4FF" stop-opacity="0"/></radialGradient>
+        <linearGradient id="kgBoard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A5CF0"/><stop offset="1" stop-color="#173CB0"/></linearGradient>
+        <radialGradient id="kgPitch" gradientUnits="userSpaceOnUse" cx="200" cy="470" r="470"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></radialGradient>
+        <pattern id="kpNet" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H6M0 0V6" stroke="#fff" stroke-width=".6" fill="none"/></pattern>
+        <radialGradient id="kgBall" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#EEF1F6"/><stop offset="1" stop-color="#B4BDCC"/></radialGradient>
+        <radialGradient id="kgBallSh" cx=".4" cy=".35" r=".75"><stop offset=".6" stop-color="#0F1B34" stop-opacity="0"/><stop offset="1" stop-color="#0F1B34" stop-opacity=".35"/></radialGradient>
+        <clipPath id="kcBall"><circle r="1"/></clipPath>
+        ${tile('kpC1', 1)}${tile('kpC2', .84)}${tile('kpC3', .7)}
+      </defs>
+      <rect x="-2400" y="-1600" width="5200" height="4400" fill="url(#kgSky)"/>
+      <rect x="-2400" y="${Y0}" width="5200" height="2600" fill="#2E8C3C"/>
+      <g class="k-crowd">${tiers}</g>
+      <rect x="-2400" y="-1600" width="5200" height="${r1(1600 + bTop)}" fill="url(#kgShade)"/>
+      <circle cx="-10" cy="150" r="190" fill="url(#kgGlow)"/><circle cx="410" cy="150" r="190" fill="url(#kgGlow)"/>
+      <g id="kPops"></g>
+      ${poly([[-150, -4, 0], [150, -4, 0], [150, -4, 1], [-150, -4, 1]], 'fill="url(#kgBoard)"')}
+      ${straight ? `<rect x="-2400" y="${r1(bTop)}" width="5200" height="1" fill="#fff" opacity=".28"/><text class="k-board" x="-1300" y="${r1(bBot - (bBot - bTop) * .3)}">${'GOT GOT NEED · SWAP YOUR SPARES · '.repeat(24)}</text>` : `<path d="${seg([-150, -4, 1], [150, -4, 1])}" stroke="#fff" stroke-opacity=".28" stroke-width="1"/>${boardTxt}`}
+      ${poly([[-150, -4, 0], [150, -4, 0], [150, 90, 0], [-150, 90, 0]], 'fill="#2E8C3C"')}
+      ${stripes}
+      ${poly([[-150, -4, 0], [150, -4, 0], [150, 90, 0], [-150, 90, 0]], 'fill="url(#kgPitch)"')}
+      <path d="${lines.join('')}" fill="none" stroke="#F2F7F0" stroke-opacity=".85" stroke-width="1.6" stroke-linecap="round"/>
+      ${sp ? `<ellipse cx="${r1(sp[0])}" cy="${r1(sp[1])}" rx="${r1(Math.max(2, .056 * sp[2]))}" ry="${r1(Math.max(.8, .021 * sp[2]))}" fill="#F2F7F0" opacity=".9"/>` : ''}
+      <g id="kNet">
+        <polygon points="${BTL} ${BTR} ${BBR} ${BBL}" fill="#061024" fill-opacity=".22"/>
+        <polygon points="${FTL} ${BTL} ${BBL} ${FBL}" fill="#061024" fill-opacity=".14"/>
+        <polygon points="${FTR} ${BTR} ${BBR} ${FBR}" fill="#061024" fill-opacity=".14"/>
+        <polygon points="${BTL} ${BTR} ${BBR} ${BBL}" fill="url(#kpNet)" opacity=".75"/>
+        <polygon points="${FTL} ${BTL} ${BBL} ${FBL}" fill="url(#kpNet)" opacity=".55"/>
+        <polygon points="${FTR} ${BTR} ${BBR} ${FBR}" fill="url(#kpNet)" opacity=".55"/>
+        <path d="M${BTL}L${BTR}M${BTL}L${BBL}M${BTR}L${BBR}M${pt(-4.065, 0, 0)}L${BBL}M${pt(4.065, 0, 0)}L${BBR}" stroke="#DDE4EF" stroke-width="1.2" fill="none" opacity=".85"/>
+      </g>
+      <g id="kSlotA"></g>
+      <g id="kRoof">
+        <polygon points="${FTL} ${FTR} ${BTR} ${BTL}" fill="#061024" fill-opacity=".2"/>
+        <polygon points="${FTL} ${FTR} ${BTR} ${BTL}" fill="url(#kpNet)" opacity=".7"/>
+        <path d="M${pt(-4.065, 0, 2.67)}L${BTL}M${pt(4.065, 0, 2.67)}L${BTR}" stroke="#DDE4EF" stroke-width="1.2" fill="none" opacity=".85"/>
+      </g>
+      <path d="M${pt(-4.065, 0, 0)}L${pt(-4.065, 0, 2.67)}L${pt(4.065, 0, 2.67)}L${pt(4.065, 0, 0)}" fill="none" stroke="#fff" stroke-width="${r1(pw)}" stroke-linejoin="round" stroke-linecap="round"/>
+      <g id="kSlotB"></g>
+      <ellipse id="kKSh" fill="#000" opacity=".28"/>
+      <g id="kKeep"><g>
+        <path d="M-.12 -.94L-.23 -.08M.12 -.94L.23 -.08" stroke="#14203F" stroke-width=".18" stroke-linecap="round" fill="none"/>
+        <path d="M-.215 -.36L-.23 -.1M.215 -.36L.23 -.1" stroke="#FF8A00" stroke-width=".19" stroke-linecap="round" fill="none"/>
+        <ellipse cx="-.26" cy="-.035" rx=".12" ry=".05" fill="#0B0F18"/><ellipse cx=".26" cy="-.035" rx=".12" ry=".05" fill="#0B0F18"/>
+        <path d="M-.28 -1.04H.28L.31 -.74H.03L0 -.82L-.03 -.74H-.31Z" fill="#14203F"/>
+        <line id="kArmL" x1="-.26" y1="-1.5" x2="-.74" y2="-1.12" stroke="#FF8A00" stroke-width=".16" stroke-linecap="round"/>
+        <line id="kArmR" x1=".26" y1="-1.5" x2=".74" y2="-1.12" stroke="#FF8A00" stroke-width=".16" stroke-linecap="round"/>
+        <path d="M-.31 -1.62Q0 -1.69 .31 -1.62L.28 -.98H-.28Z" fill="#FF8A00"/>
+        <path d="M-.3 -1.38H.3" stroke="#14203F" stroke-width=".06" opacity=".4"/>
+        <rect x="-.065" y="-1.74" width=".13" height=".12" fill="#B9794C"/>
+        <circle cy="-1.86" r=".165" fill="#C68B59"/>
+        <path d="M-.165 -1.87A.165 .165 0 0 1 .165 -1.87Q.05 -1.95 -.165 -1.87Z" fill="#2B1D14"/>
+        <circle id="kGlL" cx="-.74" cy="-1.12" r=".14" fill="#F4F6FA" stroke="#1E4FD8" stroke-width=".05"/>
+        <circle id="kGlR" cx=".74" cy="-1.12" r=".14" fill="#F4F6FA" stroke="#1E4FD8" stroke-width=".05"/>
+      </g></g>
+      <g class="k-chev">${[548, 528, 508].map(y => `<path d="M190 ${y + 5}L200 ${y - 5}L210 ${y + 5}"/>`).join('')}</g>
+      ${RM ? '' : `<circle class="k-ring" cx="${r1(REST[0])}" cy="${r1(REST[1])}" r="26" fill="none" stroke="#fff" stroke-width="2" opacity="0"><animate attributeName="r" values="26;46" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values=".7;0" dur="1.8s" repeatCount="indefinite"/></circle>`}
+      <g id="kSlotC"><g id="kBallWrap"><ellipse id="kBallSh" fill="#000"/><g id="kBall"><circle r="1" fill="url(#kgBall)"/><g clip-path="url(#kcBall)"><g id="kSpin"><path d="${pents}" fill="#1A2236"/><path d="${seams}" stroke="#7D879B" stroke-width=".05" fill="none"/></g></g><circle r="1" fill="url(#kgBallSh)"/><circle r="1" fill="none" stroke="#0F1B34" stroke-opacity=".3" stroke-width=".05"/></g></g></g>
+      <polyline id="kTrail" points="" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" style="opacity:0"/>`;
+    }
+    const svg = $k('kickSvg');
+    let slotA, slotB, slotC, ballWrap, ballEl, spinEl, ballSh, keepEl, kSh, armL, armR, glL, glR, netEls, trail, pops, slotNow;
+    function drawScene(){
+      svg.innerHTML = buildScene();
+      slotA = $k('kSlotA'); slotB = $k('kSlotB'); slotC = $k('kSlotC');
+      ballWrap = $k('kBallWrap'); ballEl = $k('kBall'); spinEl = $k('kSpin'); ballSh = $k('kBallSh');
+      keepEl = $k('kKeep'); kSh = $k('kKSh'); armL = $k('kArmL'); armR = $k('kArmR'); glL = $k('kGlL'); glR = $k('kGlR');
+      netEls = [$k('kNet'), $k('kRoof')]; trail = $k('kTrail'); pops = $k('kPops'); slotNow = slotC;
+    }
+    drawScene();
+
+    const stage = $k('kickStage'), hintEl = $k('kickHint'), sayEl = $k('kickSay'), goalEl = $k('kickGoal'), liveEl = $k('kickLive');
+    const ballBtn = $k('kickBall'), skipBtn = $k('kickSkip'), flashEl = $k('kickFlash');
+    const attr = (el, o) => { for (const k in o) el.setAttribute(k, o[k]); };
+
+    /* ---------- words ---------- */
+    const fine = !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches);
+    const G = { level: 1, inLevel: 0, score: 0, lives: 3, best: Number(ls.get('best')) || 0 };
+    G.prevBest = G.best;
+    const hudEl = root.querySelector('.k-tag');
+    function hud(){
+      if (!GAME) return;
+      $k('kickHi').textContent = `Level ${G.level} · ${BS.name}`;
+      hudEl.textContent = `Score ${G.score} · Best ${G.best} · ${'⚽'.repeat(G.lives)}${'○'.repeat(3 - G.lives)}`;
+    }
+    if (GAME){
+      root.classList.add('k-game');
+      $k('kickTitle').textContent = 'Goal game';
+      skipBtn.textContent = 'Back';
+      hintEl.textContent = RM ? 'Tap the ball to shoot' : fine ? 'Drag and flick: 3 goals to level up' : 'Flick to shoot: 3 goals to level up';
+      hud();
+    } else {
+      const hello = ls.get('hello');
+      if (hello) $k('kickHi').textContent = 'Welcome back, ' + hello;
+      try {
+        const u = new URL(location.href), gn = (u.searchParams.get('gn') || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+        if (u.searchParams.get('g') && gn) $k('kickHi').textContent = "You're invited to " + gn;
+      } catch (e) {}
+      hintEl.textContent = RM ? 'Tap the ball to kick off' : fine ? 'Drag and flick the ball into the net' : 'Flick the ball into the net to kick off';
+    }
+
+    /* ---------- layout: the stage box sits exactly over the 400×700 drawing ---------- */
+    let M = { sc: 1, left: 0, top: 0 };
+    function layout(){
+      const W = root.clientWidth || innerWidth, H = root.clientHeight || innerHeight;
+      const sc = Math.min(H / 700, W / 400 * 1.25);   // tall phones: fill the height, trim a little off the sides
+      M = { sc, left: (W - 400 * sc) / 2, top: H - 700 * sc };
+      svg.setAttribute('viewBox', `${r2(-M.left / sc)} ${r2(-M.top / sc)} ${r2(W / sc)} ${r2(H / sc)}`);
+      const s2 = stage.style;
+      s2.left = M.left + 'px'; s2.top = M.top + 'px'; s2.width = 400 * sc + 'px'; s2.height = 700 * sc + 'px';
+      s2.setProperty('--sc', sc.toFixed(3));
+      const d = Math.max(60, 76 * sc);
+      ballBtn.style.width = ballBtn.style.height = d + 'px';
+      ballBtn.style.top = (REST[1] / 7) + '%';
+    }
+    layout();
+    onResize = () => layout();
+    window.addEventListener('resize', onResize);
+
+    /* ---------- sound (made on the fly; the Sounds switch in Settings turns it off) ---------- */
+    let ac = null, noise = null;
+    function unlock(){
+      try {
+        if (!ac) ac = window.GGN_AC || new (window.AudioContext || window.webkitAudioContext)();
+        window.GGN_AC = ac;
+        if (ac.state === 'suspended') ac.resume();
+      } catch (e) { ac = null; }
+    }
+    // sounds queued while the phone is still waking the audio up play as soon as it's ready
+    const A = () => (ac && ac.state !== 'closed' && ls.get('sound') !== 'off') ? ac : null;
+    const noiseSrc = a => {
+      if (!noise){ noise = a.createBuffer(1, a.sampleRate * 2, a.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+      const n = a.createBufferSource(); n.buffer = noise; return n;
+    };
+    const envOut = (a, t0, peak, att, dec) => { const g = a.createGain(); g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + att); g.gain.exponentialRampToValueAtTime(.0001, t0 + att + dec); g.connect(a.destination); return g; };
+    const filt = (a, type, f, q) => { const b = a.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q) b.Q.value = q; return b; };
+    function sKick(p){
+      const a = A(); if (!a) return; const t = a.currentTime;
+      const o = a.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + .14);
+      o.connect(envOut(a, t, .6 * (.65 + .35 * p), .006, .18)); o.start(t); o.stop(t + .22);
+      const n = noiseSrc(a), lp = filt(a, 'lowpass', 1600); n.connect(lp); lp.connect(envOut(a, t, .3, .002, .05)); n.start(t); n.stop(t + .07);
+    }
+    function sSwish(){ const a = A(); if (!a) return; const t = a.currentTime; const n = noiseSrc(a), hp = filt(a, 'highpass', 2200); n.connect(hp); hp.connect(envOut(a, t, .14, .03, .3)); n.start(t); n.stop(t + .4); }
+    function sCheer(){
+      const a = A(); if (!a) return; const t = a.currentTime, dur = 2.6;
+      const n = noiseSrc(a); n.loop = true;
+      const b1 = filt(a, 'bandpass', 850, .8), b2 = filt(a, 'bandpass', 2100, 1.2);
+      const trem = a.createGain(); trem.gain.value = .8;
+      const lfo = a.createOscillator(); lfo.frequency.value = 7; const lg = a.createGain(); lg.gain.value = .2; lfo.connect(lg); lg.connect(trem.gain);
+      const g = a.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.26, t + .35); g.gain.setValueAtTime(.26, t + .9); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      n.connect(b1); n.connect(b2); b1.connect(trem); b2.connect(trem); trem.connect(g); g.connect(a.destination);
+      n.start(t); n.stop(t + dur); lfo.start(t); lfo.stop(t + dur);
+    }
+    function sOoh(){
+      const a = A(); if (!a) return; const t = a.currentTime;
+      const n = noiseSrc(a), b1 = filt(a, 'bandpass', 520, 4), b2 = filt(a, 'bandpass', 950, 5);
+      b1.frequency.exponentialRampToValueAtTime(330, t + .9); b2.frequency.exponentialRampToValueAtTime(700, t + .9);
+      const g = envOut(a, t, .3, .22, .9); n.connect(b1); n.connect(b2); b1.connect(g); b2.connect(g); n.start(t); n.stop(t + 1.2);
+    }
+    function sClang(){
+      const a = A(); if (!a) return; const t = a.currentTime;
+      [[1180, .16], [1770, .09], [2630, .05]].forEach(([fr, v]) => { const o = a.createOscillator(); o.type = 'triangle'; o.frequency.value = fr; o.connect(envOut(a, t, v, .003, .8)); o.start(t); o.stop(t + .85); });
+    }
+    function sGlove(){ const a = A(); if (!a) return; const t = a.currentTime; const n = noiseSrc(a), lp = filt(a, 'lowpass', 700); n.connect(lp); lp.connect(envOut(a, t, .5, .004, .12)); n.start(t); n.stop(t + .16); }
+    function sWhistle(){
+      const a = A(); if (!a) return; const t = a.currentTime;
+      [0, .32, .64].forEach((d, i) => { const o = a.createOscillator(); o.type = 'sine'; o.frequency.value = 2900; const tr = a.createOscillator(); tr.frequency.value = 38; const tg = a.createGain(); tg.gain.value = 120; tr.connect(tg); tg.connect(o.frequency); o.connect(envOut(a, t + d, .09, .01, i === 2 ? .7 : .22)); o.start(t + d); o.stop(t + d + (i === 2 ? .75 : .26)); tr.start(t + d); tr.stop(t + d + .8); });
+    }
+
+    /* ---------- keeper ---------- */
+    const K = { x: 0, plan: null };
+    const IDLE_L = [-.74, 1.12], IDLE_R = [.74, 1.12];
+    const kBase = () => Math.max(-1.6, Math.min(1.6, BS.x * .22));   // keepers cover the near post on angled shots
+    function keeperAt(t){
+      if (!K.plan){
+        const ph = t / 1800 * 2 * Math.PI, amp = .85 * (1 - Math.min(.6, Math.abs(BS.x) / 20));
+        const x = RM ? kBase() : kBase() + amp * Math.sin(ph), lean = RM ? 0 : Math.cos(ph) * .06;
+        K.x = x;
+        return { X: x, jump: RM ? 0 : Math.abs(Math.sin(t / 300)) * .04, ang: 0, hands: [[IDLE_L[0], IDLE_L[1] + lean], [IDLE_R[0], IDLE_R[1] - lean]] };
+      }
+      const p = K.plan;
+      if (p.kind === 'watch') return { X: p.x, jump: 0, ang: 0, hands: [[-.6, 1.02], [.6, 1.02]] };
+      const q = ease(clamp01((t - p.t0) / p.dur)), qa = Math.min(1, q * 1.5);
+      let slide = p.slide * q, jump = p.jump * Math.sin(q * Math.PI / 2), ang = p.ang * q;
+      let hands = [lerp2(IDLE_L, p.hands[0], qa), lerp2(IDLE_R, p.hands[1], qa)];
+      if (p.kind === 'dive' && t > p.t0 + p.dur + 140){
+        const fq = ease(clamp01((t - p.t0 - p.dur - 140) / 320)), sg = p.ang < 0 ? -1 : 1;
+        ang = lerp(p.ang, sg * 1.5, fq); jump = p.jump * (1 - fq); slide = p.slide + sg * .15 * fq;
+      }
+      if (p.kind === 'catch' && p.tc && t > p.tc){
+        const cq = ease(clamp01((t - p.tc) / 260));
+        hands = [lerp2(p.hands[0], [-.14, 1.3], cq), lerp2(p.hands[1], [.14, 1.3], cq)];
+        jump = p.jump * (1 - cq);
+      }
+      return { X: p.x + slide, jump, ang, hands };
+    }
+    const handsWorld = kp => { const c = Math.cos(kp.ang), sn = Math.sin(kp.ang); return kp.hands.map(h => [kp.X + h[0] * c + h[1] * sn, kp.jump + h[1] * c - h[0] * sn]); };
+    function drawKeeper(kp){
+      const [fx, fy, k] = P(kp.X, KZ, kp.jump);
+      keepEl.setAttribute('transform', `translate(${r2(fx)} ${r2(fy)}) scale(${r2(k)}) rotate(${r1(kp.ang * 57.296)})`);
+      const [l, r] = kp.hands;
+      attr(armL, { x2: r2(l[0]), y2: r2(-l[1]) }); attr(glL, { cx: r2(l[0]), cy: r2(-l[1]) });
+      attr(armR, { x2: r2(r[0]), y2: r2(-r[1]) }); attr(glR, { cx: r2(r[0]), cy: r2(-r[1]) });
+      const lean = Math.sin(kp.ang), g = P(kp.X + lean * .9, KZ, 0);
+      attr(kSh, { cx: r2(g[0]), cy: r2(g[1]), rx: r2(k * (.5 + Math.abs(lean) * .85)), ry: r2(k * .11) });
+    }
+    // hands meet the ball at (Xb, Yb): push off sideways, jump for high ones, stretch along the body
+    function solveDive(Xk, Xb, Yb){
+      const d = Xb - Xk, sg = d < 0 ? -1 : 1;
+      const slide = sg * Math.min(1.3, Math.max(.3, Math.abs(d) - 2));
+      const jump = Math.min(.55, Math.max(0, (Yb - 1.2) * .5));
+      const dx = Xb - (Xk + slide), up = Math.max(.15, Yb - jump);
+      const L = Math.hypot(dx, up);
+      return { slide, jump, ang: Math.atan2(dx, up), L, hands: [[-.12, L], [.12, L]] };
+    }
+
+    /* ---------- ball ---------- */
+    let fl = null, spin = 0, misses = 0, lastSaved = false;
+    const firstEver = ls.get('kickedBefore') !== '1';
+    const E = s2 => s2 * (1.15 - .15 * s2);
+    // straight from the spot to the target on the goal line, bent sideways by the curl
+    function trueAt(sh, A2, e){
+      const ux = sh.X - BS.x, uz = -BS.z, len = Math.hypot(ux, uz) || 1, rx = -uz / len, rz = ux / len, b = sh.bow * 4 * e * (1 - e);
+      return [BS.x + ux * e + rx * b, BS.z + uz * e + rz * b, BALL_R + (sh.Y - BALL_R) * e + A2 * 4 * e * (1 - e)];
+    }
+    function drawBall(X, Z, Y, alpha, prog){
+      const vr = visR(prog), b = P(X, Z, Y - BALL_R + vr), r = vr * b[2];
+      ballEl.setAttribute('transform', `translate(${r2(b[0])} ${r2(b[1])}) scale(${r2(r)})`);
+      spinEl.setAttribute('transform', `rotate(${r1(spin % 360)})`);
+      const g = P(X, Z, 0), hgt = Math.max(0, Y - BALL_R), sr = r * 1.05 / (1 + hgt * .6);
+      attr(ballSh, { cx: r2(g[0]), cy: r2(g[1]), rx: r2(sr), ry: r2(sr * .3), opacity: r2(.38 / (1 + hgt * 1.4)) });
+      ballWrap.style.opacity = alpha;
+      const slot = Z >= KZ - .05 ? slotC : Z >= 0 ? slotB : slotA;
+      if (slot !== slotNow){ slot.appendChild(ballWrap); slotNow = slot; }
+    }
+    function stepBall(t, dt, kp){
+      const f = fl; if (!f) return;
+      spin += dt * f.spin;
+      if (f.phase !== 'fly') f.spin *= .9;
+      let X, Z, Y, alpha = 1, prog = 1;
+      if (f.phase === 'fly'){
+        const q = clamp01((t - f.t0) / f.T);
+        if (f.out === 'save' && q >= SC){
+          f.phase = K.plan && K.plan.kind === 'catch' ? 'held' : 'parry'; f.t1 = t; f.c = trueAt(f.sh, f.A, E(SC));
+          if (K.plan) K.plan.tc = t;
+          sGlove();
+          later(() => missed('save'), f.phase === 'held' ? 450 : 380);
+        } else if (q >= 1){
+          f.t1 = t; f.c = trueAt(f.sh, f.A, 1);
+          if (f.out === 'goal'){ f.phase = 'net'; goal(false); }
+          else if (f.out === 'postin'){ f.phase = 'postin'; sClang(); goal(true); }
+          else if (f.out === 'postout'){ f.phase = 'postout'; sClang(); later(() => missed('post'), 450); }
+          else { f.phase = 'wide'; later(() => missed('wide'), 420); }
+        }
+        if (f.phase === 'fly'){ const e = E(q); [X, Z, Y] = trueAt(f.sh, f.A, e); prog = e; }
+      }
+      if (f.phase !== 'fly'){
+        const c = f.c, u = t - f.t1, sg = c[0] < 0 ? -1 : 1, slope = (f.sh.X - BS.x) / (BS.z || 1);   // sideways yards per yard nearer the goal
+        if (f.phase === 'net' || f.phase === 'postin'){
+          const dur = f.phase === 'postin' ? 200 : 150, q = clamp01(u / dur);
+          const tx = f.phase === 'postin' ? sg * 3.1 : Math.max(-3.8, Math.min(3.8, c[0] + slope * 1.75));
+          X = lerp(c[0], tx, q); Z = lerp(0, -1.75, q); Y = lerp(c[2], c[2] * .8, q);
+          if (u > dur){ const d = clamp01((u - dur) / 300); Y = lerp(c[2] * .8, BALL_R, d * d); }
+        } else if (f.phase === 'postout'){
+          const q = clamp01(u / 560);
+          X = c[0] + sg * 1.6 * q; Z = 3.2 * q; Y = Math.max(BALL_R, c[2] + 1.2 * q - 2.6 * q * q); alpha = 1 - clamp01((q - .55) / .45);
+        } else if (f.phase === 'wide'){
+          const q = clamp01(u / 260);
+          X = c[0] + slope * 3.6 * q; Z = -3.6 * q; Y = c[2] * (1 - .1 * q);
+          if (u > 260){ const d = clamp01((u - 260) / 300); Y = lerp(c[2] * .9, BALL_R, d); alpha = 1 - d; }
+        } else if (f.phase === 'parry'){
+          const q = clamp01(u / 620), pg = (c[0] - (K.plan ? K.plan.x : 0)) < 0 ? -1 : 1;
+          X = c[0] + pg * 3.4 * ease(q); Z = c[1] - 2.6 * q; Y = Math.max(BALL_R, c[2] + .9 * q - 1.6 * q * q); alpha = 1 - clamp01((q - .5) / .5);
+        } else {
+          const hw = handsWorld(kp); X = (hw[0][0] + hw[1][0]) / 2; Y = Math.max(BALL_R, (hw[0][1] + hw[1][1]) / 2); Z = KZ + .15;
+        }
+      }
+      drawBall(X, Z, Y, alpha, prog);
+    }
+
+    /* ---------- shots ---------- */
+    const savePct = () => GAME ? Math.min(.62, .3 + .05 * (G.level - 1)) : .38;
+    const reachMax = () => GAME ? Math.min(2.95, 2.65 + .05 * (G.level - 1)) : 2.65;
+    const reactMs = () => GAME ? Math.max(40, 110 - 12 * (G.level - 1)) : 110;
+    function canReach(sh, A2){
+      if (Math.abs(sh.X) > 2.9 && sh.Y > 1.75) return false;           // top corners: unstoppable
       const c = trueAt(sh, A2, E(SC));
-      if (Math.abs(c[0] - Xk) < .55 && c[2] < 1.9){
-        const jump = Math.max(0, (c[2] - 1.6) * .6), up = Math.max(.2, c[2] - jump);
-        K.plan = { kind: 'catch', x: Xk, t0: tStart, dur, slide: c[0] - Xk, jump, ang: 0, hands: [[-.13, up], [.13, up]] };
+      return solveDive(K.x, c[0], c[2]).L <= reachMax();
+    }
+    function planKeeper(sh, out, A2, tStart, tContact){
+      const Xk = K.x, dur = Math.max(200, tContact - tStart);
+      if (out === 'wide'){ K.plan = { kind: 'watch', x: Xk }; return; }
+      let tx = sh.X, ty = sh.Y;
+      if (out === 'save'){
+        const c = trueAt(sh, A2, E(SC));
+        if (Math.abs(c[0] - Xk) < .55 && c[2] < 1.9){
+          const jump = Math.max(0, (c[2] - 1.6) * .6), up = Math.max(.2, c[2] - jump);
+          K.plan = { kind: 'catch', x: Xk, t0: tStart, dur, slide: c[0] - Xk, jump, ang: 0, hands: [[-.13, up], [.13, up]] };
+          return;
+        }
+        tx = c[0]; ty = c[2];
+      } else if (out === 'goal' && !sh.auto && Math.abs(sh.X - Xk) < 1.3){
+        const sg = sh.X >= Xk ? -1 : 1; tx = Xk + sg * (2.4 + Math.random() * .6); ty = .5 + Math.random() * .9;   // went the wrong way
+      } else {
+        const sg = sh.X >= Xk ? 1 : -1; tx = sh.X - sg * (.8 + Math.random() * .3); ty = Math.max(.3, sh.Y * .85); // just too late
+      }
+      const d = solveDive(Xk, tx, ty);
+      K.plan = { kind: 'dive', x: Xk, t0: tStart, dur, slide: d.slide, jump: d.jump, ang: d.ang, hands: d.hands };
+    }
+    function outcomeOf(sh, A2){
+      const ax = Math.abs(sh.X);
+      let out = ax > 4.25 ? 'wide' : ax >= 3.88 ? (ax < 4.065 ? 'postin' : 'postout') : 'goal';
+      if (RM && !GAME) out = 'goal';
+      const allowed = GAME ? true : (!firstEver && !lastSaved);
+      if (out === 'goal' && !sh.auto && allowed && canReach(sh, A2) && Math.random() < savePct()) out = 'save';
+      return out;
+    }
+    function shoot(sh){
+      if (st !== 'ready' && st !== 'aim') return;
+      st = 'fly'; root.classList.add('k-busy'); trail.style.opacity = '0';
+      const A2 = .12 + .5 * sh.p;
+      const out = outcomeOf(sh, A2);
+      lastSaved = out === 'save';
+      const t0 = performance.now(), T = (760 - 330 * sh.p) * Math.sqrt(START / 12);
+      sKick(sh.p);
+      if (RM){
+        fl = null; K.plan = null;
+        if (out === 'goal' || out === 'postin'){ drawBall(Math.max(-3.5, Math.min(3.5, sh.X)), -1.75, BALL_R, 1, 1); goal(out === 'postin'); }
+        else { drawBall(BS.x, BS.z, BALL_R, .35, 0); missed(out === 'postout' ? 'post' : out); }
         return;
       }
-      tx = c[0]; ty = c[2];
-    } else if (out === 'goal' && !sh.auto && Math.abs(sh.X - Xk) < 1.3){
-      const sg = sh.X >= Xk ? -1 : 1; tx = Xk + sg * (2.4 + Math.random() * .6); ty = .5 + Math.random() * .9;   // went the wrong way
-    } else {
-      const sg = sh.X >= Xk ? 1 : -1; tx = sh.X - sg * (.8 + Math.random() * .3); ty = Math.max(.3, sh.Y * .85); // just too late
+      fl = { sh, out, t0, T, A: A2, phase: 'fly', spin: (.25 + .5 * sh.p) * (sh.bow < 0 ? -1 : 1) };
+      planKeeper(sh, out, A2, t0 + reactMs(), t0 + SC * T);
     }
-    const d = solveDive(Xk, tx, ty);
-    K.plan = { kind: 'dive', x: Xk, t0: tStart, dur, slide: d.slide, jump: d.jump, ang: d.ang, hands: d.hands };
-  }
-  function shoot(sh){
-    if (st !== 'ready' && st !== 'aim') return;
-    st = 'fly'; root.classList.add('k-busy'); trail.style.opacity = '0';
-    const ax = Math.abs(sh.X);
-    let out = ax > 4.25 ? 'wide' : ax >= 3.88 ? (ax < 4.065 ? 'postin' : 'postout') : 'goal';
-    if (RM) out = 'goal';
-    const A2 = .12 + .5 * sh.p;
-    if (out === 'goal' && !sh.auto && !firstEver && !lastSaved && canReach(sh, A2) && Math.random() < .38) out = 'save';
-    lastSaved = out === 'save';
-    const t0 = performance.now(), T = 760 - 330 * sh.p;
-    sKick(sh.p);
-    if (RM){
-      fl = null; K.plan = null;
-      drawBall(sh.X * .9, -1.75, BALL_R, 1);
-      goal(false);
-      return;
+    function autoShot(){
+      const sg = K.x > kBase() + .1 ? -1 : K.x < kBase() - .1 ? 1 : (Math.random() < .5 ? -1 : 1);
+      if (GAME) shoot({ X: sg * (1.5 + Math.random() * 2.2), Y: .3 + Math.random() * 1.4, p: .55, bow: 0, auto: false });   // no free goals in the game
+      else shoot({ X: sg * (2.5 + Math.random() * .7), Y: .35 + Math.random() * 1.1, p: .62, bow: 0, auto: true });
     }
-    fl = { sh, out, t0, T, A: A2, phase: 'fly', spin: (.25 + .5 * sh.p) * (sh.bow < 0 ? -1 : 1) };
-    planKeeper(sh, out, A2, t0 + 110, t0 + SC * T);
-  }
-  function autoShot(){
-    const sg = K.x > .1 ? -1 : K.x < -.1 ? 1 : (Math.random() < .5 ? -1 : 1);
-    shoot({ X: sg * (2.5 + Math.random() * .7), Y: .35 + Math.random() * 1.1, p: .62, bow: 0, auto: true });
-  }
-  KICK.shoot = o => shoot(Object.assign({ X: 0, Y: .5, p: .6, bow: 0, auto: false }, o));
+    KICK.shoot = o => shoot(Object.assign({ X: 0, Y: .5, p: .6, bow: 0, auto: false }, o));
+    KICK.game = () => ({ level: G.level, inLevel: G.inLevel, score: G.score, lives: G.lives, best: G.best, spot: BS.name, save: savePct(), reach: reachMax(), react: reactMs() });
 
-  /* ---------- outcomes ---------- */
-  const live = t => { liveEl.textContent = t; };
-  function goal(postIn){
-    if (st === 'over' || finished) return;
-    st = 'over'; lastOut = postIn ? 'postin' : 'goal';
-    root.classList.add('k-cheer');
-    sSwish(); sCheer();
-    live('Goal! Opening the app.');
-    goalEl.innerHTML = 'Goal!<small>' + (postIn ? 'In off the post!' : "Let's swap!") + '</small>';
-    if (RM) goalEl.style.opacity = '1';
-    else {
-      goalEl.animate([{ transform: 'translate(-50%,-50%) scale(.2)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1.18)', opacity: 1, offset: .6 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
-      flashEl.animate([{ opacity: 0 }, { opacity: .45 }, { opacity: 0 }], { duration: 300 });
-      const c = fl ? fl.c : [0, 0, 1], ip = P(c[0], -1.2, c[2]);
-      netEls.forEach(n => {
-        n.style.transformOrigin = `${r1(ip[0])}px ${r1(ip[1])}px`;
-        n.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.05,1.035)' }, { transform: 'scale(.985)' }, { transform: 'scale(1)' }], { duration: 560, easing: 'ease-out' });
-      });
-      confetti();
-      for (let i = 0; i < 16; i++){
-        const c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        attr(c2, { cx: r1(Math.random() * 520 - 60), cy: r1(150 + Math.random() * 200), r: 1.6, fill: '#fff', opacity: 0 });
-        pops.appendChild(c2);
-        c2.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 160, delay: 80 + Math.random() * 1200 });
+    /* ---------- outcomes ---------- */
+    const live = t => { liveEl.textContent = t; };
+    function confetti(){
+      const W = root.clientWidth, gx = M.left + 200 * M.sc, gy = M.top + 360 * M.sc;
+      const cols = ['#E9AE1C', '#7C9BFF', '#FFFFFF', '#4CC38A', '#FF6B6B', '#1E4FD8'];
+      for (let i = 0; i < 40; i++){
+        const d = document.createElement('i');
+        d.className = 'k-conf'; d.style.background = cols[i % cols.length];
+        root.appendChild(d);
+        const ang = -Math.PI / 2 + (Math.random() - .5) * 2.6, v = (.25 + Math.random() * .4) * Math.max(W, 360), rot = Math.random() * 720 - 360;
+        const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v;
+        d.animate([
+          { transform: `translate(${gx}px,${gy}px) rotate(0deg)`, opacity: 1 },
+          { transform: `translate(${gx + dx * .7}px,${gy + dy * .7}px) rotate(${rot}deg)`, opacity: 1, offset: .45 },
+          { transform: `translate(${gx + dx}px,${gy + dy + 300}px) rotate(${rot * 2}deg)`, opacity: 0 }
+        ], { duration: 1500 + Math.random() * 500, easing: 'cubic-bezier(.15,.6,.4,1)', fill: 'forwards' }).onfinish = () => d.remove();
       }
     }
-    if (navigator.vibrate) try { navigator.vibrate([25, 50, 25, 50, 70]); } catch (e) {}
-    later(() => finish(), RM ? 1100 : 1750);
-  }
-  function confetti(){
-    const W = root.clientWidth, gx = M.left + 200 * M.sc, gy = M.top + 360 * M.sc;
-    const cols = ['#E9AE1C', '#7C9BFF', '#FFFFFF', '#4CC38A', '#FF6B6B', '#1E4FD8'];
-    for (let i = 0; i < 40; i++){
-      const d = document.createElement('i');
-      d.className = 'k-conf'; d.style.background = cols[i % cols.length];
-      root.appendChild(d);
-      const ang = -Math.PI / 2 + (Math.random() - .5) * 2.6, v = (.25 + Math.random() * .4) * Math.max(W, 360), rot = Math.random() * 720 - 360;
-      const dx = Math.cos(ang) * v, dy = Math.sin(ang) * v;
-      d.animate([
-        { transform: `translate(${gx}px,${gy}px) rotate(0deg)`, opacity: 1 },
-        { transform: `translate(${gx + dx * .7}px,${gy + dy * .7}px) rotate(${rot}deg)`, opacity: 1, offset: .45 },
-        { transform: `translate(${gx + dx}px,${gy + dy + 300}px) rotate(${rot * 2}deg)`, opacity: 0 }
-      ], { duration: 1500 + Math.random() * 500, easing: 'cubic-bezier(.15,.6,.4,1)', fill: 'forwards' });
+    function goal(postIn){
+      if (st === 'over' || finished) return;
+      st = 'over'; lastOut = postIn ? 'postin' : 'goal';
+      root.classList.add('k-cheer');
+      sSwish(); sCheer();
+      if (GAME){ G.score++; G.inLevel++; if (G.score > G.best){ G.best = G.score; ls.set('best', String(G.best)); } hud(); }
+      live(GAME ? `Goal! Score ${G.score}.` : 'Goal! Opening the app.');
+      goalEl.innerHTML = 'Goal!<small>' + (postIn ? 'In off the post!' : GAME ? (G.inLevel >= 3 ? 'Level complete!' : `${3 - G.inLevel} more for the next level`) : "Let's swap!") + '</small>';
+      if (RM) goalEl.style.opacity = '1';
+      else {
+        goalEl.animate([{ transform: 'translate(-50%,-50%) scale(.2)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1.18)', opacity: 1, offset: .6 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
+        flashEl.animate([{ opacity: 0 }, { opacity: .45 }, { opacity: 0 }], { duration: 300 });
+        const c = fl ? fl.c : [0, 0, 1], ip = P(c[0], -1.2, c[2]);
+        netEls.forEach(n => {
+          n.style.transformOrigin = `${r1(ip[0])}px ${r1(ip[1])}px`;
+          n.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.05,1.035)' }, { transform: 'scale(.985)' }, { transform: 'scale(1)' }], { duration: 560, easing: 'ease-out' });
+        });
+        confetti();
+        for (let i = 0; i < 16; i++){
+          // camera flashes dotted around the part of the stand that's on screen
+          const s = STAND(.08 + Math.random() * .86), u = (Math.random() * 520 - 260) / F, den = u * cam.fx + cam.fz;
+          if (Math.abs(den) < 1e-3) continue;
+          const X = cam.x + (s[0] - cam.z) * (cam.fx - u * cam.fz) / den;
+          if (depthOf(X, s[0]) < 3) continue;
+          const q = P(X, s[0], s[1]), c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          attr(c2, { cx: r1(q[0]), cy: r1(q[1]), r: 1.6, fill: '#fff', opacity: 0 });
+          pops.appendChild(c2);
+          c2.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 160, delay: 80 + Math.random() * 1200 });
+        }
+      }
+      if (navigator.vibrate) try { navigator.vibrate([25, 50, 25, 50, 70]); } catch (e) {}
+      if (!GAME){ later(() => finish(), RM ? 1100 : 1750); return; }
+      later(() => {
+        goalEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' });
+        if (G.inLevel >= 3) levelUp(); else resetBall();
+      }, RM ? 900 : 1500);
     }
-  }
-  const SAY = { save: ['Saved!', 'Go again'], wide: ['Wide!', 'Have another go'], post: ['Off the post!', 'So close. Go again'] };
-  function missed(kind){
-    if (finished || st === 'over') return;
-    lastOut = kind; misses++;
-    sOoh();
-    const [big, small] = SAY[kind];
-    sayEl.innerHTML = `<b>${big}</b><span>${small}</span>`;
-    root.classList.add('k-talk');
-    sayEl.animate([{ transform: 'translate(-50%,-50%) scale(.6)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
-    live(`${big} ${small}.`);
-    later(resetBall, 1250);
-  }
-  function resetBall(){
-    if (finished) return;
-    sayEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' });
-    root.classList.remove('k-talk', 'k-busy');
-    K.plan = null; fl = null; spin = 0;
-    drawBall(0, SPOT, BALL_R, 1);
-    keepEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
-    ballWrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
-    if (misses >= 2) hintEl.textContent = 'Tip: tap the ball for an easy one';
-    st = 'ready';
-  }
-
-  /* ---------- input ---------- */
-  let pid = null, pts = [];
-  const sample = e => ({ x: (e.clientX - M.left) / M.sc, y: (e.clientY - M.top) / M.sc, t: e.timeStamp || performance.now() });
-  const nudge = () => { st = 'ready'; root.classList.remove('k-busy'); trail.style.opacity = '0'; hintEl.animate([{ transform: 'translate(-50%,-50%)' }, { transform: 'translate(-50%,-70%)' }, { transform: 'translate(-50%,-50%)' }], { duration: 320 }); };
-  root.addEventListener('contextmenu', e => e.preventDefault());
-  root.addEventListener('touchend', unlock, { passive: true });
-  root.addEventListener('pointerdown', e => {
-    unlock();
-    if (e.target.closest && e.target.closest('.k-skip')) return;
-    if (st === 'over'){ finish(); return; }
-    if (st !== 'ready' || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    e.preventDefault();
-    pid = e.pointerId; pts = [sample(e)];
-    try { root.setPointerCapture(pid); } catch (er) {}
-    st = 'aim'; root.classList.add('k-busy');
-  });
-  root.addEventListener('pointermove', e => {
-    if (st !== 'aim' || e.pointerId !== pid) return;
-    const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
-    (evs.length ? evs : [e]).forEach(ev => pts.push(sample(ev)));
-    if (pts.length > 2){ trail.setAttribute('points', pts.slice(-14).map(q => r1(q.x) + ',' + r1(q.y)).join(' ')); trail.style.opacity = '1'; }
-  });
-  root.addEventListener('pointercancel', e => { if (st === 'aim' && e.pointerId === pid) nudge(); });
-  root.addEventListener('pointerup', e => {
-    unlock();
-    if (st !== 'aim' || e.pointerId !== pid) return;
-    const a = pts[0], b = sample(e); pts.push(b);
-    trail.style.opacity = '0';
-    const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
-    if (dist < 14){
-      if (RM || Math.hypot(a.x - REST[0], a.y - REST[1]) < 70) autoShot(); else nudge();
-      return;
+    const SAY = { save: ['Saved!', 'Go again'], wide: ['Wide!', 'Have another go'], post: ['Off the post!', 'So close. Go again'] };
+    function say(big, small, red){
+      sayEl.innerHTML = `<b${red ? '' : ' style="text-shadow:0 3px 0 #1E4FD8,0 8px 20px rgba(0,0,0,.6)"'}>${big}</b><span>${small}</span>`;
+      root.classList.add('k-talk');
+      sayEl.animate([{ transform: 'translate(-50%,-50%) scale(.6)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
     }
-    if (dy > -18 || Math.abs(dx) > 2.6 * -dy){ nudge(); return; }
-    if (RM){ autoShot(); return; }
-    let i = pts.length - 1;
-    while (i > 0 && b.t - pts[i - 1].t <= 110) i--;
-    const w = pts[i];
-    const v = (w !== b && b.t - w.t >= 12) ? Math.hypot(b.x - w.x, b.y - w.y) / (b.t - w.t) : dist / Math.max(16, b.t - a.t);
-    const p = clamp01((v - .35) / 2.1);
-    let dev = 0; const ux = dx / dist, uy = dy / dist;
-    for (const q of pts){ const c = ux * (q.y - a.y) - uy * (q.x - a.x); if (Math.abs(c) > Math.abs(dev)) dev = c; }
-    shoot({ X: AIMK * dx / -dy, Y: BALL_R + Math.pow(p, 1.25) * 2.05 + Math.random() * .1, p, bow: Math.max(-.4, Math.min(.4, dev / dist)) * 5, auto: false });
-  });
-  ballBtn.addEventListener('click', e => { if (e.detail === 0 && st === 'ready'){ unlock(); autoShot(); } });
-  skipBtn.addEventListener('click', () => { unlock(); finish(); });
-  onKey = e => {
-    if (finished) return;
-    if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); finish(); return; }
-    if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') && document.activeElement !== skipBtn){
-      e.preventDefault(); e.stopPropagation(); unlock();
-      if (st === 'over') finish(); else if (st === 'ready') autoShot();
+    function missed(kind){
+      if (finished || st === 'over') return;
+      lastOut = kind; misses++;
+      sOoh();
+      if (GAME){
+        G.lives--; hud();
+        if (G.lives <= 0){ st = 'over'; say(SAY[kind][0], 'That was your last go', true); live(`${SAY[kind][0]} Full time.`); later(gameOver, 1300); return; }
+        say(SAY[kind][0], `${G.lives === 1 ? 'Last ball left' : G.lives + ' balls left'}`, true);
+        live(`${SAY[kind][0]} ${G.lives} left.`);
+      } else {
+        const [big, small] = SAY[kind];
+        say(big, small, true);
+        live(`${big} ${small}.`);
+      }
+      later(resetBall, 1250);
     }
-  };
-  window.addEventListener('keydown', onKey, true);
-
-  /* ---------- keep the app underneath out of reach until kick-off ---------- */
-  const lockApp = () => {
-    if (finished) return;
-    for (const el of document.body.children){
-      if (el === root || el.tagName === 'SCRIPT' || el.inert) continue;
-      el.inert = true; el.setAttribute('inert', ''); el.setAttribute('data-kinert', '');
+    function resetBall(){
+      if (finished) return;
+      sayEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' });
+      root.classList.remove('k-talk', 'k-busy', 'k-cheer');
+      K.plan = null; fl = null; spin = 0;
+      drawBall(BS.x, BS.z, BALL_R, 1, 0);
+      keepEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
+      ballWrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260 });
+      if (!GAME && misses >= 2) hintEl.textContent = 'Tip: tap the ball for an easy one';
+      st = 'ready';
     }
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', lockApp); else lockApp();
-
-  /* ---------- go ---------- */
-  drawBall(0, SPOT, BALL_R, 1);
-  drawKeeper(keeperAt(0));
-  if (!RM){
-    let lastT = 0;
-    const frame = t => {
-      raf = requestAnimationFrame(frame);
-      const dt = lastT ? Math.min(50, t - lastT) : 16; lastT = t;
-      const kp = keeperAt(t);
-      drawKeeper(kp);
-      stepBall(t, dt, kp);
+    function respot(sp){
+      setSpot(sp); drawScene(); K.plan = null; fl = null;
+      drawKeeper(keeperAt(performance.now())); drawBall(BS.x, BS.z, BALL_R, 1, 0);
+    }
+    // a message from the app while you're playing (e.g. you've been let in): shown over the game
+    KICK.notify = msg => {
+      if (!GAME || finished) return false;
+      let n = root.querySelector('.k-note');
+      if (!n){
+        n = document.createElement('div'); n.className = 'k-note'; n.setAttribute('role', 'status');
+        n.innerHTML = '<span></span><button type="button" class="btn small gold">Back to the app</button>';
+        n.querySelector('button').addEventListener('click', () => finish());
+        root.appendChild(n);
+      }
+      n.querySelector('span').textContent = msg; n.hidden = false;
+      clearTimeout(n._t); n._t = setTimeout(() => { n.hidden = true; }, 8000);
+      return true;
     };
-    raf = requestAnimationFrame(frame);
+    function levelUp(){
+      G.level++; G.inLevel = 0;
+      const sp = G.level <= LEVELS.length ? LEVELS[G.level - 1] : (() => { const z = 14 + Math.round(Math.random() * 10); return { x: Math.round((Math.random() * 2 - 1) * Math.min(12, z * .7)), z, name: 'Anywhere' }; })();
+      say(`Level ${G.level}!`, sp.name, false);
+      sWhistle();
+      live(`Level ${G.level}. ${sp.name}. The keeper's getting better.`);
+      later(() => {
+        svg.animate([{ opacity: 1 }, { opacity: 0 }, { opacity: 1 }], { duration: 500 });
+        later(() => { respot(sp); hud(); resetBall(); }, 250);
+      }, 1300);
+    }
+    function gameOver(){
+      sayEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' });
+      root.classList.remove('k-talk');
+      const box = document.createElement('div');
+      box.className = 'k-over'; box.id = 'kickOver';
+      box.innerHTML = `<p class="k-over-t">Full time!</p><p class="k-over-s">You scored <b>${G.score}</b></p><p class="k-over-b">${G.score > G.prevBest ? '🏆 New best!' : `Best: ${G.best}`} · reached level ${G.level}</p>
+        <div class="k-over-a"><button type="button" class="btn gold" id="kickAgain">Play again</button><button type="button" class="btn" id="kickBack">Back to the app</button></div>`;
+      root.appendChild(box);
+      live(`Full time. You scored ${G.score}. Best ${G.best}.`);
+      box.querySelector('#kickAgain').addEventListener('click', () => { box.remove(); Object.assign(G, { level: 1, inLevel: 0, score: 0, lives: 3, prevBest: G.best }); respot(LEVELS[0]); hud(); resetBall(); });
+      box.querySelector('#kickBack').addEventListener('click', () => finish());
+      try { box.querySelector('#kickAgain').focus({ preventScroll: true }); } catch (e) {}
+    }
+
+    /* ---------- input ---------- */
+    let pid = null, pts = [];
+    const sample = e => ({ x: (e.clientX - M.left) / M.sc, y: (e.clientY - M.top) / M.sc, t: e.timeStamp || performance.now() });
+    const nudge = () => { st = 'ready'; root.classList.remove('k-busy'); trail.style.opacity = '0'; hintEl.animate([{ transform: 'translate(-50%,-50%)' }, { transform: 'translate(-50%,-70%)' }, { transform: 'translate(-50%,-50%)' }], { duration: 320 }); };
+    // where a flick from the ball crosses the goal line, as yards across the goal (0 = middle)
+    function aimX(dx, dy){
+      const L = P(-4, 0, 0), R = P(4, 0, 0), ex = R[0] - L[0], ey = R[1] - L[1], det = ex * dy - dx * ey;
+      if (Math.abs(det) < 1e-6) return dx > 0 ? 99 : -99;
+      const t = (dx * (L[1] - REST[1]) - dy * (L[0] - REST[0])) / det;
+      // back from the screen to yards along the goal line (exact, so angled views aim true)
+      const u = (L[0] + ex * t - CX) / F, den = u * cam.fx + cam.fz;
+      if (Math.abs(den) < 1e-6) return dx > 0 ? 99 : -99;
+      const X = cam.x - cam.z * (cam.fx - u * cam.fz) / den;
+      return depthOf(X, 0) > 0 ? X : (dx > 0 ? 99 : -99);
+    }
+    root.addEventListener('contextmenu', e => e.preventDefault());
+    root.addEventListener('touchend', unlock, { passive: true });
+    root.addEventListener('pointerdown', e => {
+      unlock();
+      if (e.target.closest && e.target.closest('.k-skip,.k-over,.k-note')) return;
+      if (st === 'over'){ if (!GAME) finish(); return; }
+      if (st !== 'ready' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      e.preventDefault();
+      pid = e.pointerId; pts = [sample(e)];
+      try { root.setPointerCapture(pid); } catch (er) {}
+      st = 'aim'; root.classList.add('k-busy');
+    });
+    root.addEventListener('pointermove', e => {
+      if (st !== 'aim' || e.pointerId !== pid) return;
+      const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+      (evs.length ? evs : [e]).forEach(ev => pts.push(sample(ev)));
+      if (pts.length > 2){ trail.setAttribute('points', pts.slice(-14).map(q => r1(q.x) + ',' + r1(q.y)).join(' ')); trail.style.opacity = '1'; }
+    });
+    root.addEventListener('pointercancel', e => { if (st === 'aim' && e.pointerId === pid) nudge(); });
+    root.addEventListener('pointerup', e => {
+      unlock();
+      if (st !== 'aim' || e.pointerId !== pid) return;
+      const a = pts[0], b = sample(e); pts.push(b);
+      trail.style.opacity = '0';
+      const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
+      if (dist < 14){
+        if (RM || (!GAME && Math.hypot(a.x - REST[0], a.y - REST[1]) < 70)) autoShot(); else nudge();
+        return;
+      }
+      if (dy > -18 || Math.abs(dx) > 2.6 * -dy){ nudge(); return; }
+      if (RM){ autoShot(); return; }
+      let i = pts.length - 1;
+      while (i > 0 && b.t - pts[i - 1].t <= 110) i--;
+      const w = pts[i];
+      const v = (w !== b && b.t - w.t >= 12) ? Math.hypot(b.x - w.x, b.y - w.y) / (b.t - w.t) : dist / Math.max(16, b.t - a.t);
+      const p = clamp01((v - .35) / 2.1);
+      let dev = 0; const ux = dx / dist, uy = dy / dist;
+      for (const q of pts){ const c = ux * (q.y - a.y) - uy * (q.x - a.x); if (Math.abs(c) > Math.abs(dev)) dev = c; }
+      shoot({ X: aimX(dx, dy), Y: BALL_R + Math.pow(p, 1.25) * 2.05 + Math.random() * .1, p, bow: Math.max(-.4, Math.min(.4, dev / dist)) * 5, auto: false });
+    });
+    ballBtn.addEventListener('click', e => { if (e.detail === 0 && st === 'ready'){ unlock(); autoShot(); } });
+    skipBtn.addEventListener('click', () => { unlock(); finish(); });
+    onKey = e => {
+      if (finished) return;
+      if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); finish(); return; }
+      const t = document.activeElement;
+      if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') && t !== skipBtn && !(t && t.closest && t.closest('.k-over,.k-note'))){
+        e.preventDefault(); e.stopPropagation(); unlock();
+        if (st === 'over'){ if (!GAME) finish(); } else if (st === 'ready') autoShot();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+
+    /* ---------- keep the app underneath out of reach until done ---------- */
+    const lockApp = () => {
+      if (finished) return;
+      for (const el of document.body.children){
+        if (el === root || el.tagName === 'SCRIPT' || el.inert) continue;
+        el.inert = true; el.setAttribute('inert', ''); el.setAttribute('data-kinert', '');
+      }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', lockApp); else lockApp();
+
+    /* ---------- go ---------- */
+    drawBall(BS.x, BS.z, BALL_R, 1, 0);
+    drawKeeper(keeperAt(0));
+    if (!RM){
+      let lastT = 0;
+      const frame = t => {
+        raf = requestAnimationFrame(frame);
+        const dt = lastT ? Math.min(50, t - lastT) : 16; lastT = t;
+        const kp = keeperAt(t);
+        drawKeeper(kp);
+        stepBall(t, dt, kp);
+      };
+      raf = requestAnimationFrame(frame);
+    }
+  } catch (err) {
+    try { console.error('Kick-off screen failed', err); } catch (e) {}
+    finish(true);
   }
-} catch (err) {
-  try { console.error('Kick-off screen failed', err); } catch (e) {}
-  finish(true);
+}
+
+/* The goal game: open any time (from My cards, or while waiting to be let in). */
+window.GGN_PLAY = () => {
+  if ((window.GGN_KICK && window.GGN_KICK.active) || !SHELL) return;
+  const opener = document.activeElement;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = SHELL;
+  const root = tmp.firstElementChild;
+  document.body.appendChild(root);
+  html.classList.add('kick');
+  run(root, 'game', opener);
+};
+if (root0){
+  if (html.classList.contains('kick')) run(root0, 'kickoff');
+  else root0.remove();
 }
 })();
 </script>
@@ -2789,7 +2988,7 @@ function renderNotice(){
   } else if (S.saveFailed){
     html = 'Your last change has not saved yet. <button type="button" class="btn small" id="retrySave">Try again</button>'; bad = true;
   } else if (S.waiting){
-    html = "<b>Waiting to get in.</b> The organiser lets new people in. Add your cards meanwhile.";
+    html = '<b>Waiting to get in.</b> The organiser lets new people in. Add your cards meanwhile. <button type="button" class="btn small gold" data-play>⚽ Play while you wait</button>';
   } else if (S.tab !== 'friends' && waitingPlayers().length){
     const n = waitingPlayers().length;
     html = `<b>${esc(n === 1 ? `${waitingPlayers()[0].nick} is waiting to get in.` : `${n} people are waiting to get in.`)}</b> <button type="button" class="btn small gold" id="noticeWaiting">See</button>`;
@@ -2835,7 +3034,7 @@ function renderSummary(){
     ${st.par ? `<p class="parline"><button type="button" class="linkbtn" id="showPars">✦ ${plural(st.par, 'parallel')}</button> <small class="muted">kept apart from your normal cards</small></p>` : ''}
     <label class="toggle"><input type="checkbox" id="completeToggle" ${d.complete ? 'checked' : ''} ${canWriteActive() ? '' : 'disabled'}>
       <span><b>Show friends what I need</b><br><small class="muted">Switch on once you've ticked off every card you've got, so swap suggestions are right.</small></span></label>
-    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button>${pendingFor(S.activeId).length ? `<button type="button" class="btn small primary" id="goToSwap">${plural(pendingFor(S.activeId).length, 'swap')} to hand over</button>` : ''}</div>`;
+    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button><button type="button" class="btn small ghost" data-play>⚽ Goal game</button>${pendingFor(S.activeId).length ? `<button type="button" class="btn small primary" id="goToSwap">${plural(pendingFor(S.activeId).length, 'swap')} to hand over</button>` : ''}</div>`;
   renderSaveState();
 }
 function sectionOptions(){
@@ -3099,7 +3298,7 @@ function chipList(cards, cls, key, limit = 18, ask){
   return html;
 }
 function waitingHTML(){
-  return `<div class="panel empty"><h2>Waiting to get in</h2><p>This swap group is locked, so the organiser lets each new person in. They'll see your name.</p><p>Add your cards on <b>My cards</b> while you wait. As soon as you're let in, your friends and swaps show up here.</p></div>`;
+  return `<div class="panel empty"><h2>Waiting to get in</h2><p>This swap group is locked, so the organiser lets each new person in. They'll see your name.</p><p>Add your cards on <b>My cards</b> while you wait. As soon as you're let in, your friends and swaps show up here.</p><div class="sheet-actions"><button type="button" class="btn gold" data-play>⚽ Play the goal game while you wait</button></div></div>`;
 }
 function renderSwaps(){
   const el = $('#view-swaps');
@@ -3325,7 +3524,10 @@ $('#sheet').addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden && !S.sheetLocked) closeSheet(); });
 let toastTimer = null;
 function toast(msg, withUndo){
-  if (kickActive()){ window.GGN_KICK.onDone(() => toast(msg, withUndo)); return; }
+  if (kickActive()){
+    if (!withUndo && window.GGN_KICK.notify && window.GGN_KICK.notify(msg)) return;   // in the goal game: show it there
+    window.GGN_KICK.onDone(() => toast(msg, withUndo)); return;
+  }
   $('#toastMsg').textContent = msg;
   $('#toastUndo').hidden = !withUndo || !S.undo;
   $('#toast').hidden = false;
@@ -4149,6 +4351,7 @@ $('#summary').addEventListener('click', e => {
   }
 });
 $('#who').addEventListener('click', openWhoSheet);
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-play]') && window.GGN_PLAY) window.GGN_PLAY(); });
 $('#notice').addEventListener('click', e => {
   if (e.target.closest('#retrySave')){ S.saveFailed = false; flushAll(); renderNotice(); }
   if (e.target.closest('#noticeRequests')){ S.tab = 'swaps'; store.set('tab', 'swaps'); renderAll(); window.scrollTo(0, 0); }
