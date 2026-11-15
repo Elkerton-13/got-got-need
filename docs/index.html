@@ -108,7 +108,7 @@ small{font-size:12.5px}
 .btn.small{min-height:34px;padding:0 11px;font-size:13px}
 .btn:disabled{opacity:.45;cursor:default}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.key,.linkbtn,.frow,.pchip,.ministep button):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.key,.linkbtn,.frow,.pchip,.ministep button,button.chip):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* summary */
@@ -235,6 +235,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .chip.bad{background:transparent;border-color:var(--bad);color:var(--bad)}
 .chip.hit{outline:2px solid var(--good);outline-offset:-2px}
 .chip.par{align-items:center;background:var(--par-soft);border-color:transparent}
+button.chip.pick{cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:left}
+button.chip.pick::after{content:"+";margin-left:1px;font-weight:800;color:var(--accent)}
+button.chip.pick.give::after{color:var(--gold-ink)}
+button.chip.pick:active{transform:scale(.96)}
 
 /* parallels */
 .pdot{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);vertical-align:-1px}
@@ -297,7 +301,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .scrim{position:absolute;inset:0;background:var(--scrim)}
 .sheet-card{position:relative;width:min(580px,100%);max-height:90%;overflow:auto;padding:18px 16px 22px;border-radius:14px 14px 0 0;background:var(--surface);box-shadow:0 -10px 30px rgba(0,0,0,.25)}
 @media (min-width:640px){.sheet{align-items:center}.sheet-card{border-radius:14px}}
-.sheet-card h2{font-size:21px;margin-bottom:6px}
+.sheet-card h2{font-size:21px;margin-bottom:6px;padding-right:44px}
 .sheet-card p{margin:6px 0}
 .sheet-card label.f{display:block;margin:12px 0 4px;font-weight:700;font-size:13px}
 .sheet-card input[type=text],.sheet-card textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px}
@@ -2384,7 +2388,7 @@ function runSettle(){
     const whose = n.pid === S.uid ? 'your' : `${getDoc(n.pid).nick}'s`;
     toast(n.kind === 'done' ? `${n.nick} marked ${whose} swap as done. Cards updated.`
       : n.kind === 'calledoff' ? `${n.nick} called off ${whose} swap.`
-      : `${n.nick} declined ${whose} swap offer.`);
+      : `${n.nick} declined ${whose} swap request.`);
   }
 }
 function noticeIncoming(){
@@ -2396,11 +2400,11 @@ function noticeIncoming(){
   let msg = '';
   if (S.seenAgreed){
     const fresh = [...agreed].filter(id => !S.seenAgreed.has(id)).length;
-    if (fresh) msg = fresh === 1 ? "Your swap offer was accepted. It's on your To swap list." : `${fresh} swap offers accepted. They're on your To swap list.`;
+    if (fresh) msg = fresh === 1 ? "Your swap request was accepted. It's on your To swap list." : `${fresh} swap requests accepted. They're on your To swap list.`;
   }
   if (S.seenIncoming){
     const fresh = [...ids].filter(id => !S.seenIncoming.has(id)).length;
-    if (fresh) msg = fresh === 1 ? 'New swap offer. Check the Swaps tab.' : `${fresh} new swap offers. Check the Swaps tab.`;
+    if (fresh) msg = fresh === 1 ? 'New swap request. Check the Swaps tab.' : `${fresh} new swap requests. Check the Swaps tab.`;
   }
   if (msg) toast(msg);
   S.seenIncoming = ids; S.seenAgreed = agreed;
@@ -2645,6 +2649,9 @@ function renderNotice(){
     html = "Can't reach the swap list yet. Check your connection; it updates by itself."; bad = true;
   } else if (S.saveFailed){
     html = 'Your last change has not saved yet. <button type="button" class="btn small" id="retrySave">Try again</button>'; bad = true;
+  } else if (S.tab !== 'swaps' && activeDoc() && incomingFor(S.activeId).length){
+    const inc = incomingFor(S.activeId);
+    html = `<b>${esc(inc.length === 1 ? `${inc[0].from.nick} sent you a swap request.` : `${inc.length} swap requests for you.`)}</b> <button type="button" class="btn small gold" id="noticeRequests">See ${inc.length === 1 ? 'it' : 'them'}</button>`;
   }
   el.hidden = !html;
   el.className = 'notice' + (bad ? ' bad' : '');
@@ -2913,7 +2920,7 @@ function renderBadges(){
   const badge = $('#swapsCount');
   badge.textContent = inc ? String(inc) : pend ? String(pend) : live ? String(live) : '';
   badge.classList.toggle('alert', inc > 0);
-  badge.title = inc ? `${plural(inc, 'swap offer')} waiting` : pend ? `${plural(pend, 'swap')} to hand over` : live ? `${plural(live, 'friend')} to swap with` : '';
+  badge.title = inc ? `${plural(inc, 'swap request')} waiting` : pend ? `${plural(pend, 'swap')} to hand over` : live ? `${plural(live, 'friend')} to swap with` : '';
   $('#friendsCount').textContent = friends.filter(p => !p.demo).length ? String(friends.filter(p => !p.demo).length) : '';
 }
 function renderTabs(){
@@ -2922,11 +2929,15 @@ function renderTabs(){
     $('#view-' + t).hidden = S.tab !== t;
   }
 }
-function chipList(cards, cls, key, limit = 18){
+function pickChip(c, cls, fid, side, extra){
+  const verb = side === 'get' ? 'Ask for' : 'Offer';
+  return `<button type="button" class="chip pick ${cls || ''}" data-ask="${esc(fid)}" data-side="${side}" data-card="${c.id}" title="${esc(c.name + ' · ' + CLUBS[c.club][0])}" aria-label="${esc(`${verb} ${c.id} ${c.name}`)}"><b>${c.id}</b>${esc(c.short)}${c.rare ? ' ★' : ''}${extra || ''}</button>`;
+}
+function chipList(cards, cls, key, limit = 18, ask){
   if (!cards.length) return '<small class="muted">None</small>';
   const open = S.expanded.has(key);
   const shown = open ? cards : cards.slice(0, limit);
-  let html = `<div class="chips">${shown.map(c => cardChip(c, cls)).join('')}</div>`;
+  let html = `<div class="chips">${shown.map(c => ask ? pickChip(c, cls, ask.fid, ask.side) : cardChip(c, cls)).join('')}</div>`;
   if (cards.length > limit) html += `<p class="help"><button type="button" class="linkbtn" data-expand="${esc(key)}">${open ? 'Show fewer' : `Show all ${cards.length}`}</button></p>`;
   return html;
 }
@@ -2941,7 +2952,7 @@ function renderSwaps(){
   const friends = friendsOf(S.activeId);
   if (!friends.length){
     el.innerHTML = `<div class="panel empty"><h2>No friends here yet</h2>
-      <ol class="steps"><li>Everyone adds their swaps, and ticks off the cards they've got.</li><li>Each person switches on <b>Show friends what I need</b>.</li><li>This tab then lists who to swap with, and which cards.</li><li>Send a swap offer. Once it's accepted it goes on your To swap list, and your cards update when you mark it as swapped.</li></ol>
+      <ol class="steps"><li>Everyone adds their swaps, and ticks off the cards they've got.</li><li>Each person switches on <b>Show friends what I need</b>.</li><li>This tab then lists who to swap with, and which cards.</li><li>Tap a card to send a swap request. Once it's accepted it goes on your To swap list, and your cards update when you mark it as swapped.</li></ol>
       <div class="sheet-actions"><button type="button" class="btn gold" id="demoOn">Preview with 2 demo friends</button></div>
       <p class="help">Demo friends are only on your screen and are never saved.</p></div>`;
     return;
@@ -2961,14 +2972,16 @@ function renderSwaps(){
   for (const m of active){
     const f = m.f;
     const st = stats(f);
+    const ask = side => f.demo ? null : { fid: f.id, side };
     const giveBlock = f.complete
-      ? `<h4>You give · ${m.give.length}</h4>${chipList(m.give, 'give', 'give:' + f.id)}`
+      ? `<h4>You give · ${m.give.length}</h4>${chipList(m.give, 'give', 'give:' + f.id, 18, ask('give'))}`
       : `<h4>You give</h4><small class="muted">${esc(f.nick)} hasn't switched on their needs yet, so we can't tell what they're after.</small>`;
     html += `<article class="panel partner">
       <header><div><h3>${esc(f.full)} ${f.demo ? '<span class="pill">Demo</span>' : ''}${f.managed ? '<span class="pill">managed</span>' : ''}</h3>
         <p class="meta">Base ${st.base}/300 · ${plural(st.spares, 'swap')} · ${f.demo ? 'demo' : ago(f.updatedAt)}</p></div>
         <div class="score${m.score ? '' : ' zero'}"><b>${m.score}</b><span>${m.score === 1 ? 'swap' : 'swaps'}</span></div></header>
-      <div class="cols"><div><h4>You get · ${m.get.length}</h4>${chipList(m.get, 'get', 'get:' + f.id)}</div><div>${giveBlock}</div></div>
+      ${f.demo ? '' : '<p class="help" style="margin:8px 0 0">Tap a card to ask for it, or to offer one of yours.</p>'}
+      <div class="cols"><div><h4>You get · ${m.get.length}</h4>${chipList(m.get, 'get', 'get:' + f.id, 18, ask('get'))}</div><div>${giveBlock}</div></div>
       <div class="actions">${partnerActions(f, m)}</div>
     </article>`;
   }
@@ -2977,7 +2990,7 @@ function renderSwaps(){
   const rows = [];
   for (const c of myNeeds){
     const holders = friends.filter(f => cnt(f, c.id) > 1);
-    if (holders.length) rows.push(`<div class="needrow"><b>${c.id}</b><div><span>${esc(c.name)}</span> <small class="muted">${esc(CLUBS[c.club][1])}${c.rare ? ' ★' : ''}</small><br><small>${holders.map(f => `${esc(f.nick)}${cnt(f, c.id) > 2 ? ` (${cnt(f, c.id) - 1})` : ''}`).join(', ')}</small></div></div>`);
+    if (holders.length) rows.push(`<div class="needrow"><b>${c.id}</b><div><span>${esc(c.name)}</span> <small class="muted">${esc(CLUBS[c.club][1])}${c.rare ? ' ★' : ''}</small><br><small>${holders.map(f => f.demo ? `${esc(f.nick)}` : `<button type="button" class="linkbtn" data-ask="${esc(f.id)}" data-side="get" data-card="${c.id}">Ask ${esc(f.nick)}</button>`).join(' · ')}</small></div></div>`);
   }
   const open = S.expanded.has('needs');
   html += `<div class="panel"><h2>Cards you need that friends can swap</h2>
@@ -2988,16 +3001,16 @@ function renderSwaps(){
 }
 function idChips(ids, cls){ return ids.length ? `<div class="chips">${ids.map(id => cardChip(BY_ID.get(id), cls)).join('')}</div>` : '<small class="muted">Nothing</small>'; }
 function partnerActions(f, m){
-  if (f.demo) return `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy swap message</button><small class="muted" style="align-self:center">Demo friend, so offers are off</small>`;
+  if (f.demo) return `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy swap message</button><small class="muted" style="align-self:center">Demo friend, so requests are off</small>`;
   const pendOffer = (getDoc(S.activeId).offers || []).find(o => o.to === f.id && o.st === 'open' && !replyOf(f, o.id));
   const agreed = pendingFor(S.activeId).some(x => x.otherId === f.id);
   const theirs = incomingFor(S.activeId).some(x => x.from.id === f.id);
   const any = m.get.length || m.give.length;
   let html = '';
   if (agreed) html += `<span class="pill" style="align-self:center">Agreed swap on your To swap list</span>`;
-  if (theirs && !pendOffer) html += `<span class="pill gold" style="align-self:center">They've sent you an offer, see above</span>`;
-  else if (pendOffer) html += `<span class="pill gold" style="align-self:center">Offer sent · waiting</span><button type="button" class="linkbtn" data-cancel="${esc(pendOffer.id)}">Cancel offer</button>`;
-  else if (any) html += `<button type="button" class="btn small gold" data-offer="${esc(f.id)}">${agreed ? 'Send another offer' : 'Send swap offer'}</button>`;
+  if (theirs && !pendOffer) html += `<span class="pill gold" style="align-self:center">They've sent you a request, see above</span>`;
+  else if (pendOffer) html += `<span class="pill gold" style="align-self:center">Request sent · waiting</span><button type="button" class="linkbtn" data-cancel="${esc(pendOffer.id)}">Cancel request</button>`;
+  else if (any) html += `<button type="button" class="btn small gold" data-offer="${esc(f.id)}">${agreed ? 'Send another request' : 'Send swap request'}</button>`;
   html += `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy message</button>`;
   if (any) html += `<button type="button" class="linkbtn" data-done="${esc(f.id)}">Swapped in person? Update my cards</button>`;
   return html;
@@ -3021,7 +3034,7 @@ function offerWarnings(me, o){
   return w;
 }
 function incomingHTML(me, inc){
-  return `<div class="panel inbox"><h2>Offers for you · ${inc.length}</h2>${inc.map(({ from, o }) => {
+  return `<div class="panel inbox"><h2>Swap requests for you · ${inc.length}</h2>${inc.map(({ from, o }) => {
     const w = offerWarnings(me, o);
     return `<div class="offer"><p style="margin:0"><b>${esc(from.full)}</b> wants to swap <small class="muted">· ${esc(ago(o.at).replace('updated ', ''))}</small></p>
       <h4>You get · ${o.give.length}</h4>${cardRow(o.give)}
@@ -3032,7 +3045,7 @@ function incomingHTML(me, inc){
   }).join('')}</div>`;
 }
 function outgoingHTML(outg){
-  return `<div class="panel"><h2>Your offers</h2>${outg.map(({ o, to, reply }) => {
+  return `<div class="panel"><h2>Your requests</h2>${outg.map(({ o, to, reply }) => {
     const name = to ? to.full : 'Someone who left';
     const state = o.st === 'open' ? (reply ? (reply.s === 'accepted' ? 'Swapped, updating your cards' : reply.s === 'cancelled' ? 'Called off' : 'Declined') : `Waiting for ${name}`)
       : o.st === 'done' ? 'Swapped · cards updated' : o.st === 'declined' ? 'Declined' : 'Called off';
@@ -3326,7 +3339,7 @@ function openWhoSheet(){
   if (!d && S.db && S.uid && !S.readOnly){ openJoin(); return; }
   if (!S.isOwner){ if (activeDoc()) openSettings(); else toast('Sign in to Claude to join'); return; }
   const managed = allPlayers().filter(p => p.managed);
-  const rows = [d].concat(managed).filter(Boolean).map(p => `<button type="button" class="frow" data-switch="${esc(p.id)}">${avatar(p)}<span class="t"><b>${esc(p.full)}${p.id === S.uid ? ' <span class="pill">You</span>' : ' <span class="pill">Managed</span>'}</b><small>${p.id === S.activeId ? 'Editing now' : 'Tap to edit this list'}${incomingFor(p.id).length ? ' · swap offer waiting' : ''}</small></span></button>`).join('');
+  const rows = [d].concat(managed).filter(Boolean).map(p => `<button type="button" class="frow" data-switch="${esc(p.id)}">${avatar(p)}<span class="t"><b>${esc(p.full)}${p.id === S.uid ? ' <span class="pill">You</span>' : ' <span class="pill">Managed</span>'}</b><small>${p.id === S.activeId ? 'Editing now' : 'Tap to edit this list'}${incomingFor(p.id).length ? ' · swap request waiting' : ''}</small></span></button>`).join('');
   openSheet(`<h2 id="sheetTitle">Whose cards are you editing?</h2>
     <p class="help">You can keep lists for friends who ${isWeb() ? "don't use the app" : "aren't on Claude"}. Their swaps show up for everyone.</p>
     ${rows}
@@ -3371,42 +3384,61 @@ function openFriend(id){
   const me = activeDoc();
   const sw = ALL.filter(c => cnt(p, c.id) > 1);
   const needs = p.complete ? ALL.filter(c => cnt(p, c.id) === 0 && inScope(p, c)) : [];
-  const swChips = sw.length ? `<div class="chips">${sw.map(c => cardChip(c, me && cnt(me, c.id) === 0 && inScope(me, c) ? 'get hit' : '', cnt(p, c.id) > 2 ? ` ×${cnt(p, c.id) - 1}` : '')).join('')}</div>` : '<small class="muted">No swaps listed yet.</small>';
+  const canAsk = !!me && !p.demo && p.id !== S.activeId && canWriteActive();
+  const swChips = sw.length ? `<div class="chips">${sw.map(c => { const cls = me && cnt(me, c.id) === 0 && inScope(me, c) ? 'get hit' : '', x = cnt(p, c.id) > 2 ? ` ×${cnt(p, c.id) - 1}` : ''; return canAsk ? pickChip(c, cls, p.id, 'get', x) : cardChip(c, cls, x); }).join('')}</div>` : '<small class="muted">No swaps listed yet.</small>';
   const needChips = !p.complete ? `<small class="muted">${esc(p.nick)} hasn't switched on their needs.</small>`
-    : needs.length ? `<div class="chips">${needs.slice(0, 120).map(c => cardChip(c, me && cnt(me, c.id) > 1 ? 'give hit' : '')).join('')}${needs.length > 120 ? `<span class="chip">+${needs.length - 120} more</span>` : ''}</div>` : '<small class="muted">Needs nothing. Set complete!</small>';
+    : needs.length ? `<div class="chips">${needs.slice(0, 120).map(c => canAsk && cnt(me, c.id) > 1 ? pickChip(c, 'give hit', p.id, 'give') : cardChip(c, me && cnt(me, c.id) > 1 ? 'give hit' : '')).join('')}${needs.length > 120 ? `<span class="chip">+${needs.length - 120} more</span>` : ''}</div>` : '<small class="muted">Needs nothing. Set complete!</small>';
   const st = stats(p);
   const ownerTools = S.isOwner && p.managed ? `<div class="sheet-actions"><button type="button" class="btn small primary" id="fEdit">Edit their cards</button></div>` : '';
   openSheet(`<h2 id="sheetTitle">${esc(p.full)}</h2>
     <p class="meta">Base ${st.base}/300 · ${st.ins} inserts · ${p.demo ? 'demo' : ago(p.updatedAt)}</p>
-    <h4 style="margin-top:14px">Swaps · ${sw.length}${me && p.id !== S.activeId ? ' <small>(green outline = you need it)</small>' : ''}</h4>${swChips}
+    ${canAsk && (sw.length || needs.length) ? `<p class="help" style="margin-top:8px">Tap one of their swaps to ask for it${p.complete ? ', or one of their needs to offer your spare' : ''}. ${esc(p.nick)} gets a request to accept or decline.</p>` : ''}
+    <div id="fAsk"><h4 style="margin-top:14px">Swaps · ${sw.length}${me && p.id !== S.activeId ? ' <small>(green outline = you need it)</small>' : ''}</h4>${swChips}
     <h4 style="margin-top:14px">Needs${p.complete ? ' · ' + needs.length : ''}${me && p.id !== S.activeId && p.complete ? ' <small>(green outline = you have a spare)</small>' : ''}</h4>${needChips}
+    </div>
     ${allPars(p).length ? `<h4 style="margin-top:14px">✦ Parallels · ${st.par}</h4><div class="chips">${allPars(p).map(x => parChip(BY_ID.get(x.id), x.code, x.n)).join('')}</div>` : ''}
     ${p.other ? `<h4 style="margin-top:14px">Other swaps</h4><p>${esc(p.other)}</p>` : ''}
     ${ownerTools}`, root => {
       const b = root.querySelector('#fEdit');
       if (b) b.addEventListener('click', () => { switchProfile(p.id); S.tab = 'cards'; store.set('tab', 'cards'); renderAll(); });
+      root.querySelector('#fAsk').addEventListener('click', e => { const a = e.target.closest('[data-ask]'); if (a) openOffer(a.dataset.ask, { [a.dataset.side]: [a.dataset.card] }); });
     });
 }
-function openOffer(fid){
+function openOffer(fid, preset){
   const me = activeDoc(); const f = getDoc(fid);
   if (!me || !f || f.demo) return;
   if (!canWriteActive()){ needJoin(); return; }
+  if (fid === S.activeId) return;
   const m = computeMatch(me, f);
-  const promised = resFor(me.id).out;
+  const promised = resFor(me.id).out, theirPromised = resFor(f.id).out;
   const k = m.score;
   let gi = 0, gv = 0;
+  // a tapped card goes to the top, ticked, even if the suggestions left it out
+  const lift = (list, ids, owner) => {
+    const out = list.slice();
+    for (const id of (ids || []).slice().reverse()){
+      const c = BY_ID.get(id); if (!c || cnt(owner, id) < 2) continue;
+      const i = out.findIndex(x => x.id === id); if (i >= 0) out.splice(i, 1);
+      out.unshift(c);
+    }
+    return out;
+  };
+  const pre = preset ? new Set([...(preset.get || []), ...(preset.give || [])]) : null;
   const row = (c, side, checked, note) => `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" ${checked ? 'checked' : ''} ${note ? 'disabled' : ''}> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}${note ? ' · ' + note : ''}</small></label></li>`;
-  const getRows = m.get.map(c => row(c, 'get', gi++ < k, '')).join('');
-  const giveRows = m.give.map(c => {
+  const getRows = lift(m.get, preset && preset.get, f).map(c => {
+    const note = cnt(f, c.id) - 1 - (theirPromised[c.id] || 0) > 0 ? '' : 'already promised in another swap';
+    return row(c, 'get', !note && (pre ? pre.has(c.id) : gi++ < k), note);
+  }).join('');
+  const giveRows = lift(m.give, preset && preset.give, me).map(c => {
     const free = cnt(me, c.id) - 1 - (promised[c.id] || 0);
     const note = free > 0 ? '' : 'already in another swap';
-    return row(c, 'give', !note && gv++ < k, note);
+    return row(c, 'give', !note && (pre ? pre.has(c.id) : gv++ < k), note);
   }).join('');
-  openSheet(`<h2 id="sheetTitle">Swap offer to ${esc(f.full)}</h2>
-    <p>Tick the cards for this swap. When ${esc(f.nick)} accepts, it goes on both your To swap lists. Cards only change when you mark it as swapped.</p>
+  openSheet(`<h2 id="sheetTitle">Swap request to ${esc(f.full)}</h2>
+    <p>Tick what you'd like and what you'll give. ${esc(f.nick)} gets the request and can accept or decline. Once they accept, it goes on both your To swap lists, and cards only move when you mark it as swapped.</p>
     <h4 style="margin-top:12px">You get from ${esc(f.nick)}</h4>${getRows ? `<ul class="scanlist">${getRows}</ul>` : '<small class="muted">Nothing they have spare that you need.</small>'}
     <h4 style="margin-top:12px">You give to ${esc(f.nick)}</h4>${giveRows ? `<ul class="scanlist">${giveRows}</ul>` : `<small class="muted">${f.complete ? 'Nothing of yours that they need.' : esc(f.nick) + " hasn't switched on their needs yet."}</small>`}
-    <div class="sheet-actions"><button type="button" class="btn gold" id="offerGo">Send offer</button></div>`, root => {
+    <div class="sheet-actions"><button type="button" class="btn gold" id="offerGo">Send request</button></div>`, root => {
       root.querySelector('#offerGo').addEventListener('click', async () => {
         const pick = side => [...root.querySelectorAll(`input[data-side="${side}"]:checked`)].map(i => i.value);
         const get = pick('get'), give = pick('give');
@@ -3420,7 +3452,7 @@ function openOffer(fid){
         S.dirty.add(pid);
         const ok = await flush(pid);
         closeSheet(); renderAll();
-        toast(ok ? `Offer sent to ${f.nick}` : "Offer not sent yet. It'll retry.");
+        toast(ok ? `Request sent to ${f.nick}. They'll see it in their Swaps tab.` : "Request not sent yet. It'll retry.");
       });
     });
 }
@@ -3429,7 +3461,7 @@ async function respondOffer(fromId, offerId, accept){
   if (!canWriteActive()){ needJoin(); return; }
   const from = getDoc(fromId);
   const o = from && (from.offers || []).find(x => x.id === offerId && x.st === 'open');
-  if (!o){ toast('That offer was withdrawn'); renderAll(); return; }
+  if (!o){ toast('That request was withdrawn'); renderAll(); return; }
   const d = mutable(pid);
   d.replies = d.replies || {};
   if (d.replies[offerId]) return;
@@ -3440,7 +3472,7 @@ async function respondOffer(fromId, offerId, accept){
   const ok = await flush(pid);
   renderAll();
   if (!ok) toast("Couldn't save just now. It'll retry.");
-  else toast(accept ? "Swap agreed. It's on your To swap list. Tap We've swapped when you've done it." : 'Offer declined');
+  else toast(accept ? "Swap agreed. It's on your To swap list. Tap We've swapped when you've done it." : 'Request declined');
 }
 async function cancelOffer(offerId){
   const pid = S.activeId;
@@ -3451,7 +3483,7 @@ async function cancelOffer(offerId){
   o.st = 'cancelled';
   S.dirty.add(pid);
   await flush(pid);
-  renderAll(); toast('Offer cancelled');
+  renderAll(); toast('Request cancelled');
   scheduleSettle();
 }
 function findPending(id){ return pendingFor(S.activeId).find(x => x.id === id) || null; }
@@ -3776,6 +3808,7 @@ $('#summary').addEventListener('click', e => {
 $('#who').addEventListener('click', openWhoSheet);
 $('#notice').addEventListener('click', e => {
   if (e.target.closest('#retrySave')){ S.saveFailed = false; flushAll(); renderNotice(); }
+  if (e.target.closest('#noticeRequests')){ S.tab = 'swaps'; store.set('tab', 'swaps'); renderAll(); window.scrollTo(0, 0); }
   if (e.target.closest('#noticeJoin')) openWelcome();
 });
 $('#addPanel').addEventListener('click', e => {
@@ -3797,6 +3830,7 @@ $('#addPanel').addEventListener('click', e => {
 $('#addPanel').addEventListener('input', e => { if (e.target.id === 'aiReply') renderAiPreview(); });
 $('#photoInput').addEventListener('change', () => { const f = $('#photoInput').files[0]; $('#photoInput').value = ''; if (f) startScan(f); });
 $('#view-swaps').addEventListener('click', e => {
+  const ak = e.target.closest('[data-ask]'); if (ak){ openOffer(ak.dataset.ask, { [ak.dataset.side]: [ak.dataset.card] }); return; }
   const of = e.target.closest('[data-offer]'); if (of){ openOffer(of.dataset.offer); return; }
   const ac = e.target.closest('[data-accept]'); if (ac){ ac.disabled = true; respondOffer(ac.dataset.accept, ac.dataset.oid, true); return; }
   const de = e.target.closest('[data-decline]'); if (de){ de.disabled = true; respondOffer(de.dataset.decline, de.dataset.oid, false); return; }
