@@ -86,6 +86,21 @@ h4{margin:0 0 6px;font-size:12px;letter-spacing:.07em;text-transform:uppercase;c
 .sub{margin:3px 0 0;color:var(--muted);font-size:12.5px}
 .who{flex:none;display:inline-flex;align-items:center;gap:6px;max-width:46%;min-height:36px;padding:0 12px;border-radius:18px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13.5px;cursor:pointer}
 .who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-r{flex:none;display:flex;align-items:center;gap:8px;min-width:0;max-width:calc(100% - 168px)}
+/* narrow phones: the title shrinks to stay on one line, then the subtitle and logo make way */
+.top .brand{flex:1 1 auto}
+.top .brand > div{flex:1;min-width:0}
+.top h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@supports (container-type:inline-size){
+  .top .brand{container:brand / inline-size}
+  .top .brand > div{container:btxt / inline-size}
+  @container brand (max-width:180px){.top .logo{display:none}}
+  @container btxt (max-width:150px){.top .sub{display:none}}
+}
+.top-r .who{flex:0 1 auto;min-width:0;max-width:100%}
+.playbtn{position:relative;flex:none;display:inline-grid;place-items:center;width:36px;height:36px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:19px;line-height:1;cursor:pointer;transition:transform .12s}
+.playbtn::before{content:"";position:absolute;inset:-4px}
+.playbtn:active{transform:scale(.92)}
 .tabs{display:flex;gap:2px;margin-top:12px;border-bottom:1px solid var(--line)}
 .tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;background:none;border:0;border-bottom:3px solid transparent;font-weight:700;font-size:14.5px;color:var(--muted);cursor:pointer}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
@@ -108,7 +123,7 @@ small{font-size:12.5px}
 .btn.small{min-height:34px;padding:0 11px;font-size:13px}
 .btn:disabled{opacity:.45;cursor:default}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.key,.linkbtn,.frow,.pchip,.ministep button,button.chip):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.playbtn,.key,.linkbtn,.frow,.pchip,.ministep button,button.chip):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* summary */
@@ -1195,7 +1210,10 @@ if (root0){
           <p class="sub">Topps Premier League 2026/27 card swaps</p>
         </div>
       </div>
-      <button type="button" class="who" id="who" aria-haspopup="dialog"><span id="whoName">Loading…</span><span aria-hidden="true">▾</span></button>
+      <div class="top-r">
+        <button type="button" class="playbtn" id="playTop" data-play aria-label="Goal game" title="Goal game"><span aria-hidden="true">⚽</span></button>
+        <button type="button" class="who" id="who" aria-haspopup="dialog"><span id="whoName">Loading…</span><span aria-hidden="true">▾</span></button>
+      </div>
     </header>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button type="button" role="tab" id="tab-cards" aria-controls="view-cards" aria-selected="true" data-tab="cards">My cards</button>
@@ -2965,7 +2983,19 @@ function renderWho(){
   $('#whoName').textContent = label;
   const mine = isWeb() && S.uid ? getDoc(S.uid) : null;   // remembered for the kick-off screen's "Welcome back"
   if (mine && mine.nick && mine.nick !== store.get('hello')) store.set('hello', mine.nick);
+  fitTitle();
 }
+// the header title stays on one line: on narrow phones it shrinks just enough for whatever font the phone has
+function fitTitle(){
+  const h = $('.top h1');
+  if (!h) return;
+  h.style.fontSize = '';
+  let f = parseFloat(getComputedStyle(h).fontSize) || 23;
+  while (h.scrollWidth > h.clientWidth + .5 && f > 15){ f -= .5; h.style.fontSize = f + 'px'; }
+}
+let fitRaf = 0;
+window.addEventListener('resize', () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(fitTitle); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTitle);
 function renderNotice(){
   const el = $('#notice');
   let html = '', bad = false;
@@ -3034,7 +3064,7 @@ function renderSummary(){
     ${st.par ? `<p class="parline"><button type="button" class="linkbtn" id="showPars">✦ ${plural(st.par, 'parallel')}</button> <small class="muted">kept apart from your normal cards</small></p>` : ''}
     <label class="toggle"><input type="checkbox" id="completeToggle" ${d.complete ? 'checked' : ''} ${canWriteActive() ? '' : 'disabled'}>
       <span><b>Show friends what I need</b><br><small class="muted">Switch on once you've ticked off every card you've got, so swap suggestions are right.</small></span></label>
-    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button><button type="button" class="btn small ghost" data-play>⚽ Goal game</button>${pendingFor(S.activeId).length ? `<button type="button" class="btn small primary" id="goToSwap">${plural(pendingFor(S.activeId).length, 'swap')} to hand over</button>` : ''}</div>`;
+    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button>${pendingFor(S.activeId).length ? `<button type="button" class="btn small primary" id="goToSwap">${plural(pendingFor(S.activeId).length, 'swap')} to hand over</button>` : ''}</div>`;
   renderSaveState();
 }
 function sectionOptions(){
