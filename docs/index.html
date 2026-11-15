@@ -239,6 +239,14 @@ button.chip.pick{cursor:pointer;-webkit-tap-highlight-color:transparent;text-ali
 button.chip.pick::after{content:"+";margin-left:1px;font-weight:800;color:var(--accent)}
 button.chip.pick.give::after{color:var(--gold-ink)}
 button.chip.pick:active{transform:scale(.96)}
+.chip .fav,.scanlist .fav{color:#E0262F;font-size:.9em}
+.prefs{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.ptsbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;padding:9px 12px;border-radius:9px;background:var(--paper);font-size:14px}
+.ptsbar b{font:800 17px/1 var(--display);font-variant-numeric:tabular-nums}
+.pill.even{border-color:transparent;background:var(--good);color:var(--surface)}
+.pill.off{border-color:transparent;background:var(--bad);color:var(--surface)}
+.scanlist .pt{margin-left:auto;padding-left:8px;white-space:nowrap;font-weight:700;color:var(--muted);font-size:12px}
+.gifttag{display:inline-block;margin-left:4px}
 
 /* parallels */
 .pdot{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);vertical-align:-1px}
@@ -1926,6 +1934,51 @@ const PARALLELS = [
   ['FF1', 'FoilFractor 1/1', 'FoilFractor 1/1', 'num', 'linear-gradient(135deg,#ff5f6d,#ffc371,#47e5bc,#5f8bff,#c06cff)']
 ].map(([code, name, short, group, col, where]) => ({ code, name, short, group, col, where: where || '' }));
 const PAR_BY_CODE = Object.fromEntries(PARALLELS.map(p => [p.code, p]));
+
+/* Like-for-like points: base 1, inserts 2, harder inserts 3, case hits and short prints 5. */
+const TIER3 = ['8B', 'RTN', 'RT', 'CC', 'SGL'];
+function cardValue(c){ return !c ? 0 : c.set === 'base' ? 1 : c.rare ? 5 : TIER3.includes(c.set) ? 3 : 2; }
+const ptsOf = ids => ids.reduce((t, id) => t + cardValue(BY_ID.get(id)), 0);
+const ptsTxt = n => `${n} ${n === 1 ? 'pt' : 'pts'}`;
+/* Pick cards on both sides with equal points: the biggest even swap (more cards wins a tie). */
+function balancedPick(getC, giveC){
+  const best = list => {
+    const m = new Map([[0, []]]);
+    list.slice(0, 30).forEach((c, i) => {
+      const v = cardValue(c);
+      for (const [sum, idx] of [...m.entries()].sort((a, b) => b[0] - a[0])){
+        const ns = sum + v; if (ns > 150) continue;
+        const cur = m.get(ns);
+        if (!cur || idx.length + 1 > cur.length) m.set(ns, idx.concat(i));
+      }
+    });
+    return m;
+  };
+  const a = best(getC), b = best(giveC);
+  let top = 0; for (const k of a.keys()) if (k > top && b.has(k)) top = k;
+  return { get: new Set(a.get(top).map(i => getC[i].id)), give: new Set(b.get(top).map(i => giveC[i].id)) };
+}
+/* Swap settings live in the doc's scope list as one "pref:{...}" entry, so the database rules don't change. */
+function readPrefs(list){
+  const out = { teams: [], fair: false, gift: false };
+  const e = (Array.isArray(list) ? list : []).find(x => typeof x === 'string' && x.startsWith('pref:'));
+  if (!e) return out;
+  try {
+    const j = JSON.parse(e.slice(5));
+    if (Array.isArray(j.t)) out.teams = j.t.filter(k => typeof k === 'string' && CLUBS[k]).slice(0, 6);
+    out.fair = !!j.f; out.gift = !!j.g;
+  } catch {}
+  return out;
+}
+function prefScope(d){
+  const j = {};
+  if (d.teams && d.teams.length) j.t = d.teams.slice(0, 6);
+  if (d.fair) j.f = 1;
+  if (d.gift) j.g = 1;
+  return Object.keys(j).length ? ['pref:' + JSON.stringify(j)] : [];
+}
+const isFav = (p, c) => !!(p && p.teams && c && p.teams.includes(c.club));
+const favFirst = (list, p) => p && p.teams && p.teams.length ? list.slice().sort((a, b) => isFav(p, b) - isFav(p, a)) : list;
 const PAR_GROUPS = [['quick', 'Quick'], ['shop', 'From packs'], ['volt', 'Voltage (tins and packs)'], ['num', 'Numbered foils']];
 const parKey = (id, code) => id + '~' + code;
 function splitKey(k){ k = String(k); const i = k.indexOf('~'); return i < 0 ? [k, null] : [k.slice(0, i), k.slice(i + 1)]; }
@@ -2050,8 +2103,9 @@ function computeMatch(me, f){
   return { f, get, give, score: f.complete ? Math.min(get.length, give.length) : 0 };
 }
 function rankMatches(me, friends){
+  const fav = m => m.get.filter(c => isFav(me, c)).length;
   return friends.map(f => computeMatch(me, f)).sort((x, y) =>
-    (y.score - x.score) || (y.get.length - x.get.length) || (y.give.length - x.give.length) || x.f.nick.localeCompare(y.f.nick));
+    (y.score - x.score) || (fav(y) - fav(x)) || (y.get.length - x.get.length) || (y.give.length - x.give.length) || x.f.nick.localeCompare(y.f.nick));
 }
 function stats(p){
   let base = 0, ins = 0, spares = 0, par = 0;
@@ -2089,7 +2143,7 @@ function settleSent(d, lookup){
     } else if (o.st !== 'open'){
       continue;
     } else if (r.s === 'declined'){
-      o.st = 'declined'; notes.push({ kind: 'declined', nick, id: o.id });
+      o.st = 'declined'; notes.push({ kind: r.c ? 'changed' : 'declined', nick, id: o.id });
     } else if (r.s === 'cancelled'){
       o.st = 'cancelled'; notes.push({ kind: 'calledoff', nick, id: o.id });
     } else if (isAgreed(r) && r.done){
@@ -2180,7 +2234,7 @@ function sanitize(raw, id){
   return {
     id,
     ...setNames({}, cleanName(raw.adult) || cleanName(raw.nick) || 'Friend', raw.child),
-    counts, complete: !!raw.complete, scope,
+    counts, complete: !!raw.complete, scope, ...readPrefs(raw.scope),
     other: typeof raw.other === 'string' ? raw.other.slice(0, 400) : '',
     managed: !!raw.managed,
     updatedAt: Number(raw.updatedAt) || 0,
@@ -2201,7 +2255,8 @@ function cleanOffers(a){
     give: cleanIds(o.give), get: cleanIds(o.get),
     at: Number(o.at) || 0,
     st: OFFER_ST.includes(o.st) ? o.st : 'open',
-    ...(cleanDone(o.done) ? { done: cleanDone(o.done) } : {})
+    ...(cleanDone(o.done) ? { done: cleanDone(o.done) } : {}),
+    ...(typeof o.re === 'string' && /^[a-z0-9]{1,24}$/i.test(o.re) ? { re: o.re } : {})
   } : null).filter(o => o && o.id && o.to && (o.give.length || o.get.length));
 }
 function cleanDone(x){ return x && typeof x === 'object' ? { gave: cleanIds(x.gave), got: cleanIds(x.got), at: Number(x.at) || 0 } : null; }
@@ -2211,6 +2266,7 @@ function cleanReplies(r){
     if (/^[a-z0-9]{1,24}$/i.test(k) && v && ['accepted', 'declined', 'cancelled'].includes(v.s)){
       const o = { s: v.s, at: Number(v.at) || 0 };
       if (v.v === 2) o.v = 2;
+      if (typeof v.c === 'string' && /^[a-z0-9]{1,24}$/i.test(v.c)) o.c = v.c;
       const dn = cleanDone(v.done); if (dn) o.done = dn;
       out[k] = o;
     }
@@ -2219,21 +2275,23 @@ function cleanReplies(r){
 }
 function toStore(d){
   return {
-    v: 1, adult: d.adult, child: d.child || '', nick: d.nick, counts: { ...d.counts }, complete: !!d.complete, scope: [...d.scope], other: d.other || '', managed: !!d.managed, updatedAt: d.updatedAt || 0,
+    v: 1, adult: d.adult, child: d.child || '', nick: d.nick, counts: { ...d.counts }, complete: !!d.complete, scope: [...d.scope].concat(prefScope(d)), other: d.other || '', managed: !!d.managed, updatedAt: d.updatedAt || 0,
     offers: (d.offers || []).map(o => {
       const x = { id: o.id, to: o.to, give: [...o.give], get: [...o.get], at: o.at, st: o.st };
+      if (o.re) x.re = o.re;
       if (o.done) x.done = { gave: [...o.done.gave], got: [...o.done.got], at: o.done.at || 0 };
       return x;
     }),
     replies: Object.fromEntries(Object.entries(d.replies || {}).map(([k, v]) => {
       const x = { s: v.s, at: v.at || 0 };
       if (v.v === 2) x.v = 2;
+      if (v.c) x.c = v.c;
       if (v.done) x.done = { gave: [...v.done.gave], got: [...v.done.got], at: v.done.at || 0 };
       return [k, x];
     }))
   };
 }
-function newDoc(id, adult, child){ return setNames({ id, counts: {}, complete: false, scope: ['base'], other: '', managed: false, updatedAt: 0, offers: [], replies: {} }, adult || 'Friend', child); }
+function newDoc(id, adult, child){ return setNames({ id, counts: {}, complete: false, scope: ['base'], teams: [], fair: false, gift: false, other: '', managed: false, updatedAt: 0, offers: [], replies: {} }, adult || 'Friend', child); }
 function getDoc(id){
   if (!id) return null;
   if (S.local[id]) return S.local[id];
@@ -2388,6 +2446,7 @@ function runSettle(){
     const whose = n.pid === S.uid ? 'your' : `${getDoc(n.pid).nick}'s`;
     toast(n.kind === 'done' ? `${n.nick} marked ${whose} swap as done. Cards updated.`
       : n.kind === 'calledoff' ? `${n.nick} called off ${whose} swap.`
+      : n.kind === 'changed' ? `${n.nick} changed ${whose} swap request. Check the Swaps tab.`
       : `${n.nick} declined ${whose} swap request.`);
   }
 }
@@ -2403,8 +2462,11 @@ function noticeIncoming(){
     if (fresh) msg = fresh === 1 ? "Your swap request was accepted. It's on your To swap list." : `${fresh} swap requests accepted. They're on your To swap list.`;
   }
   if (S.seenIncoming){
-    const fresh = [...ids].filter(id => !S.seenIncoming.has(id)).length;
-    if (fresh) msg = fresh === 1 ? 'New swap request. Check the Swaps tab.' : `${fresh} new swap requests. Check the Swaps tab.`;
+    const fresh = [...ids].filter(id => !S.seenIncoming.has(id));
+    if (fresh.length === 1){
+      let x = null; for (const pid of myProfiles()){ x = incomingFor(pid).find(i => i.o.id === fresh[0]) || x; }
+      msg = x && x.o.re ? `${x.from.nick} changed your swap request. Check the Swaps tab.` : x && requestKind(x.o) === 'gift' ? `${x.from.nick} wants to gift you cards 🎁 Check the Swaps tab.` : 'New swap request. Check the Swaps tab.';
+    } else if (fresh.length) msg = `${fresh.length} new swap requests. Check the Swaps tab.`;
   }
   if (msg) toast(msg);
   S.seenIncoming = ids; S.seenAgreed = agreed;
@@ -2651,7 +2713,9 @@ function renderNotice(){
     html = 'Your last change has not saved yet. <button type="button" class="btn small" id="retrySave">Try again</button>'; bad = true;
   } else if (S.tab !== 'swaps' && activeDoc() && incomingFor(S.activeId).length){
     const inc = incomingFor(S.activeId);
-    html = `<b>${esc(inc.length === 1 ? `${inc[0].from.nick} sent you a swap request.` : `${inc.length} swap requests for you.`)}</b> <button type="button" class="btn small gold" id="noticeRequests">See ${inc.length === 1 ? 'it' : 'them'}</button>`;
+    const one = inc[0], k1 = inc.length === 1 ? (one.o.re ? 'changed' : requestKind(one.o)) : '';
+    const line = inc.length > 1 ? `${inc.length} swap requests for you.` : k1 === 'changed' ? `${one.from.nick} changed your swap request.` : k1 === 'gift' ? `${one.from.nick} wants to gift you ${plural(one.o.give.length, 'card')} 🎁` : `${one.from.nick} sent you a swap request.`;
+    html = `<b>${esc(line)}</b> <button type="button" class="btn small gold" id="noticeRequests">See ${inc.length === 1 ? 'it' : 'them'}</button>`;
   }
   el.hidden = !html;
   el.className = 'notice' + (bad ? ' bad' : '');
@@ -2929,15 +2993,22 @@ function renderTabs(){
     $('#view-' + t).hidden = S.tab !== t;
   }
 }
-function pickChip(c, cls, fid, side, extra){
+function pickChip(c, cls, fid, side, extra, fav){
   const verb = side === 'get' ? 'Ask for' : 'Offer';
-  return `<button type="button" class="chip pick ${cls || ''}" data-ask="${esc(fid)}" data-side="${side}" data-card="${c.id}" title="${esc(c.name + ' · ' + CLUBS[c.club][0])}" aria-label="${esc(`${verb} ${c.id} ${c.name}`)}"><b>${c.id}</b>${esc(c.short)}${c.rare ? ' ★' : ''}${extra || ''}</button>`;
+  return `<button type="button" class="chip pick ${cls || ''}" data-ask="${esc(fid)}" data-side="${side}" data-card="${c.id}" title="${esc(c.name + ' · ' + CLUBS[c.club][0])}" aria-label="${esc(`${verb} ${c.id} ${c.name}${fav ? ', a team they want' : ''}`)}">${fav ? '<span class="fav" aria-hidden="true">♥</span>' : ''}<b>${c.id}</b>${esc(c.short)}${c.rare ? ' ★' : ''}${extra || ''}</button>`;
+}
+function prefPills(p){
+  const out = [];
+  if (p.teams && p.teams.length) out.push(`<span class="pill">♥ ${esc(p.teams.map(k => CLUBS[k][1]).join(', '))}</span>`);
+  if (p.fair) out.push('<span class="pill gold">Like-for-like swaps</span>');
+  if (p.gift) out.push('<span class="pill good">🎁 Happy to gift spares</span>');
+  return out.length ? `<div class="prefs">${out.join('')}</div>` : '';
 }
 function chipList(cards, cls, key, limit = 18, ask){
   if (!cards.length) return '<small class="muted">None</small>';
   const open = S.expanded.has(key);
   const shown = open ? cards : cards.slice(0, limit);
-  let html = `<div class="chips">${shown.map(c => ask ? pickChip(c, cls, ask.fid, ask.side) : cardChip(c, cls)).join('')}</div>`;
+  let html = `<div class="chips">${shown.map(c => ask ? pickChip(c, cls, ask.fid, ask.side, '', ask.fav && isFav(ask.fav, c)) : cardChip(c, cls)).join('')}</div>`;
   if (cards.length > limit) html += `<p class="help"><button type="button" class="linkbtn" data-expand="${esc(key)}">${open ? 'Show fewer' : `Show all ${cards.length}`}</button></p>`;
   return html;
 }
@@ -2965,32 +3036,33 @@ function renderSwaps(){
   if (pend.length) html += toSwapHTML(pend);
   const outg = outgoingFor(S.activeId);
   if (outg.length) html += outgoingHTML(outg);
-  if (S.demo) html += `<div class="notice">Showing demo friends. <button type="button" class="btn small" id="demoOff">Hide demo friends</button></div>`;
+  if (S.demo) html += `<div class="notice">Showing demo friends. They're only on your phone, so you can't send them requests. <button type="button" class="btn small" id="demoOff">Hide demo friends</button></div>`;
   if (!me.complete) html += `<div class="notice">Your needs are hidden from friends until you switch on <b>Show friends what I need</b> on My cards. Until then, some of these may be cards you already have.</div>`;
   const active = matches.filter(m => m.get.length || m.give.length);
   const idle = matches.filter(m => !m.get.length && !m.give.length);
   for (const m of active){
     const f = m.f;
     const st = stats(f);
-    const ask = side => f.demo ? null : { fid: f.id, side };
+    const ask = (side, who) => f.demo ? null : { fid: f.id, side, fav: who };
+    const getL = favFirst(m.get, me), giveL = favFirst(m.give, f);
     const giveBlock = f.complete
-      ? `<h4>You give · ${m.give.length}</h4>${chipList(m.give, 'give', 'give:' + f.id, 18, ask('give'))}`
+      ? `<h4>You give · ${m.give.length}</h4>${chipList(giveL, 'give', 'give:' + f.id, 18, ask('give', f))}`
       : `<h4>You give</h4><small class="muted">${esc(f.nick)} hasn't switched on their needs yet, so we can't tell what they're after.</small>`;
     html += `<article class="panel partner">
       <header><div><h3>${esc(f.full)} ${f.demo ? '<span class="pill">Demo</span>' : ''}${f.managed ? '<span class="pill">managed</span>' : ''}</h3>
-        <p class="meta">Base ${st.base}/300 · ${plural(st.spares, 'swap')} · ${f.demo ? 'demo' : ago(f.updatedAt)}</p></div>
+        <p class="meta">Base ${st.base}/300 · ${plural(st.spares, 'swap')} · ${f.demo ? 'demo' : ago(f.updatedAt)}</p>${prefPills(f)}</div>
         <div class="score${m.score ? '' : ' zero'}"><b>${m.score}</b><span>${m.score === 1 ? 'swap' : 'swaps'}</span></div></header>
       ${f.demo ? '' : '<p class="help" style="margin:8px 0 0">Tap a card to ask for it, or to offer one of yours.</p>'}
-      <div class="cols"><div><h4>You get · ${m.get.length}</h4>${chipList(m.get, 'get', 'get:' + f.id, 18, ask('get'))}</div><div>${giveBlock}</div></div>
+      <div class="cols"><div><h4>You get · ${m.get.length}</h4>${chipList(getL, 'get', 'get:' + f.id, 18, ask('get', me))}</div><div>${giveBlock}</div></div>
       <div class="actions">${partnerActions(f, m)}</div>
     </article>`;
   }
   if (idle.length) html += `<p class="help">Nothing to swap right now with ${esc(idle.map(m => m.f.nick).join(', '))}.</p>`;
-  const myNeeds = ALL.filter(c => cnt(me, c.id) === 0 && inScope(me, c));
+  const myNeeds = favFirst(ALL.filter(c => cnt(me, c.id) === 0 && inScope(me, c)), me);
   const rows = [];
   for (const c of myNeeds){
     const holders = friends.filter(f => cnt(f, c.id) > 1);
-    if (holders.length) rows.push(`<div class="needrow"><b>${c.id}</b><div><span>${esc(c.name)}</span> <small class="muted">${esc(CLUBS[c.club][1])}${c.rare ? ' ★' : ''}</small><br><small>${holders.map(f => f.demo ? `${esc(f.nick)}` : `<button type="button" class="linkbtn" data-ask="${esc(f.id)}" data-side="get" data-card="${c.id}">Ask ${esc(f.nick)}</button>`).join(' · ')}</small></div></div>`);
+    if (holders.length) rows.push(`<div class="needrow"><b>${isFav(me, c) ? '<span class="fav" style="color:#E0262F" aria-label="your team">♥</span>' : ''}${c.id}</b><div><span>${esc(c.name)}</span> <small class="muted">${esc(CLUBS[c.club][1])}${c.rare ? ' ★' : ''}</small><br><small>${holders.map(f => f.demo ? `${esc(f.nick)}` : `<button type="button" class="linkbtn" data-ask="${esc(f.id)}" data-side="get" data-card="${c.id}">Ask ${esc(f.nick)}</button>`).join(' · ')}</small></div></div>`);
   }
   const open = S.expanded.has('needs');
   html += `<div class="panel"><h2>Cards you need that friends can swap</h2>
@@ -3001,7 +3073,7 @@ function renderSwaps(){
 }
 function idChips(ids, cls){ return ids.length ? `<div class="chips">${ids.map(id => cardChip(BY_ID.get(id), cls)).join('')}</div>` : '<small class="muted">Nothing</small>'; }
 function partnerActions(f, m){
-  if (f.demo) return `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy swap message</button><small class="muted" style="align-self:center">Demo friend, so requests are off</small>`;
+  if (f.demo) return `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy swap message</button><small class="muted" style="align-self:center">Demo friends only live on your phone, so they can't get requests. Try it with a real friend, or with a list you keep for someone.</small>`;
   const pendOffer = (getDoc(S.activeId).offers || []).find(o => o.to === f.id && o.st === 'open' && !replyOf(f, o.id));
   const agreed = pendingFor(S.activeId).some(x => x.otherId === f.id);
   const theirs = incomingFor(S.activeId).some(x => x.from.id === f.id);
@@ -3033,22 +3105,34 @@ function offerWarnings(me, o){
   for (const id of o.give) if (cnt(me, id) > 0) w.push(`you already have ${id}`);
   return w;
 }
+function ptsBarHTML(getIds, giveIds, me, f){
+  const g = ptsOf(getIds), v = ptsOf(giveIds);
+  const tag = g === v ? '<span class="pill even">Even</span>' : v > g ? `<span class="pill off">You give ${ptsTxt(v - g)} more</span>` : `<span class="pill gold">You get ${ptsTxt(g - v)} more</span>`;
+  return `<div class="ptsbar"><span>You get <b>${ptsTxt(g)}</b></span><span>· You give <b>${ptsTxt(v)}</b></span>${tag}</div>`;
+}
+function requestKind(o){ return !o.get.length ? 'gift' : !o.give.length ? 'ask' : 'swap'; }
 function incomingHTML(me, inc){
   return `<div class="panel inbox"><h2>Swap requests for you · ${inc.length}</h2>${inc.map(({ from, o }) => {
-    const w = offerWarnings(me, o);
-    return `<div class="offer"><p style="margin:0"><b>${esc(from.full)}</b> wants to swap <small class="muted">· ${esc(ago(o.at).replace('updated ', ''))}</small></p>
-      <h4>You get · ${o.give.length}</h4>${cardRow(o.give)}
-      <h4>You give · ${o.get.length}</h4>${cardRow(o.get)}
+    const w = offerWarnings(me, o), kind = requestKind(o);
+    const what = o.re ? 'changed your request' : kind === 'gift' ? `wants to gift you ${plural(o.give.length, 'card')} 🎁` : kind === 'ask' ? `asks if you'd gift ${o.get.length === 1 ? 'this card' : 'these cards'}` : 'wants to swap';
+    const fairOn = me.fair || from.fair;
+    const unfair = me.fair && kind !== 'gift' && ptsOf(o.get) > ptsOf(o.give);
+    return `<div class="offer"><p style="margin:0"><b>${esc(from.full)}</b> ${what} <small class="muted">· ${esc(ago(o.at).replace('updated ', ''))}</small></p>
+      ${o.give.length ? `<h4>You get · ${o.give.length}</h4>${cardRow(o.give)}` : ''}
+      ${o.get.length ? `<h4>You give · ${o.get.length}</h4>${cardRow(o.get)}` : ''}
+      ${fairOn && kind === 'swap' || unfair ? ptsBarHTML(o.give, o.get) : ''}
+      ${unfair ? `<p class="flag">Not like for like: you'd give ${ptsTxt(ptsOf(o.get))} for ${ptsTxt(ptsOf(o.give))}. Tap Change it to even it up.</p>` : ''}
       ${w.length ? `<p class="flag">Check first: ${esc(w.join('; '))}</p>` : ''}
-      <div class="actions"><button type="button" class="btn small gold" data-accept="${esc(from.id)}" data-oid="${esc(o.id)}">Accept swap</button><button type="button" class="btn small" data-decline="${esc(from.id)}" data-oid="${esc(o.id)}">Decline</button></div>
-      <p class="help">Accepting puts it on both your To swap lists. No cards change until you've swapped.</p></div>`;
+      <div class="actions"><button type="button" class="btn small gold" data-accept="${esc(from.id)}" data-oid="${esc(o.id)}">${kind === 'gift' ? 'Accept gift' : kind === 'ask' ? 'Gift it' : 'Accept swap'}</button><button type="button" class="btn small" data-counter="${esc(from.id)}" data-oid="${esc(o.id)}">Change it</button><button type="button" class="btn small" data-decline="${esc(from.id)}" data-oid="${esc(o.id)}">Decline</button></div>
+      <p class="help">Accepting puts it on both your To swap lists. No cards change until you've swapped. Change it lets you swap cards in or out and send it back.</p></div>`;
   }).join('')}</div>`;
 }
 function outgoingHTML(outg){
   return `<div class="panel"><h2>Your requests</h2>${outg.map(({ o, to, reply }) => {
     const name = to ? to.full : 'Someone who left';
-    const state = o.st === 'open' ? (reply ? (reply.s === 'accepted' ? 'Swapped, updating your cards' : reply.s === 'cancelled' ? 'Called off' : 'Declined') : `Waiting for ${name}`)
-      : o.st === 'done' ? 'Swapped · cards updated' : o.st === 'declined' ? 'Declined' : 'Called off';
+    const changed = reply && reply.s === 'declined' && reply.c;
+    const state = o.st === 'open' ? (reply ? (reply.s === 'accepted' ? 'Swapped, updating your cards' : reply.s === 'cancelled' ? 'Called off' : changed ? 'They changed it, see above' : 'Declined') : `Waiting for ${name}`)
+      : o.st === 'done' ? 'Swapped · cards updated' : o.st === 'declined' ? (changed ? 'They changed it' : 'Declined') : 'Called off';
     return `<div class="orow"><div><b>${esc(name)}</b> · ${esc(state)}<br><small class="muted">You get ${esc(o.get.join(', ') || 'nothing')} · you give ${esc(o.give.join(', ') || 'nothing')}</small></div>${o.st === 'open' && !reply ? `<button type="button" class="linkbtn" data-cancel="${esc(o.id)}">Cancel</button>` : ''}</div>`;
   }).join('')}</div>`;
 }
@@ -3281,8 +3365,13 @@ function openSettings(){
     <label class="f">Cards I'm collecting</label>
     <p class="help" style="margin-top:0">Your needs only count cards in these sets. Most people collect the base set; tick insert sets you're chasing too.</p>
     <div class="setchips">${setChips}</div>
+    <label class="f">Teams I'm looking for</label>
+    <p class="help" style="margin-top:0">Cards from these teams go first in your swap suggestions, and friends can see which teams you're after. Up to 6.</p>
+    <div class="setchips" id="setTeams">${CLUB_ORDER.map(k => `<label><input type="checkbox" name="team" value="${k}" ${(d.teams || []).includes(k) ? 'checked' : ''} ${editable ? '' : 'disabled'}> ${esc(CLUBS[k][1])}</label>`).join('')}</div>
+    <label class="toggle"><input type="checkbox" id="setFair" ${d.fair ? 'checked' : ''} ${editable ? '' : 'disabled'}><span><b>Like-for-like swaps</b><br><small class="muted">Rare cards count for more: base 1 point, inserts 2, harder inserts 3, ★ case hits and short prints 5. Requests show both sides' points and warn you before an uneven swap. Friends see that you do like-for-like.</small></span></label>
+    <label class="toggle"><input type="checkbox" id="setGift" ${d.gift ? 'checked' : ''} ${editable ? '' : 'disabled'}><span><b>Happy to gift my spares</b><br><small class="muted">Friends can ask for your spares without giving anything back. You still accept or decline each one.</small></span></label>
     <label class="f" for="setOther">Other swaps (autographs, relics, anything not on the list)</label>
-    <textarea id="setOther" rows="3" maxlength="400" placeholder="e.g. Palmer green /99, Saka PL parallel" ${editable ? '' : 'disabled'}>${esc(d.other || '')}</textarea>
+    <textarea id="setOther" rows="3" maxlength="400" placeholder="e.g. Palmer autograph, Saka relic" ${editable ? '' : 'disabled'}>${esc(d.other || '')}</textarea>
     <label class="toggle" style="border-top:0;padding-top:0"><input type="checkbox" id="setSound" ${soundOn() ? 'checked' : ''}><span><b>Sounds</b><br><small class="muted">The swoosh when cards are swapped, and the crowd on the kick-off screen. This phone only.</small></span></label>
     <label class="toggle"><input type="checkbox" id="setKick" ${store.get('kickoff') !== 'off' ? 'checked' : ''}><span><b>Kick-off screen</b><br><small class="muted">Flick a ball into the net each time you open the app. This phone only.</small></span></label>
     <div class="sheet-actions"><button type="button" class="btn primary" id="setSave" ${editable ? '' : 'disabled'}>Save settings</button></div>
@@ -3307,12 +3396,18 @@ function openSettings(){
         S.fb.F.signOut(S.fb.auth).then(() => closeSheet()).catch(() => toast("Couldn't sign out"));
       });
       root.querySelector('#setKick').addEventListener('change', e => store.set('kickoff', e.target.checked ? 'on' : 'off'));
+      root.querySelector('#setTeams').addEventListener('change', e => {
+        if (e.target.checked && root.querySelectorAll('input[name=team]:checked').length > 6){ e.target.checked = false; toast('Pick up to 6 teams'); }
+      });
       root.querySelector('#setSound').addEventListener('change', e => { store.set('sound', e.target.checked ? 'on' : 'off'); if (e.target.checked){ audio(); setTimeout(() => whoosh(0, true), 50); } });
       root.querySelector('#setSave').addEventListener('click', () => {
         const doc = mutable(S.activeId);
         setNames(doc, root.querySelector('#setAdult').value || doc.adult, root.querySelector('#setChild').value);
         const scope = [...root.querySelectorAll('input[name=scope]:checked')].map(i => i.value);
         doc.scope = scope.length ? scope : ['base'];
+        doc.teams = [...root.querySelectorAll('input[name=team]:checked')].map(i => i.value).slice(0, 6);
+        doc.fair = root.querySelector('#setFair').checked;
+        doc.gift = root.querySelector('#setGift').checked;
         doc.other = root.querySelector('#setOther').value.slice(0, 400);
         scheduleSave(S.activeId); closeSheet(); renderAll(); toast('Settings saved');
       });
@@ -3391,7 +3486,7 @@ function openFriend(id){
   const st = stats(p);
   const ownerTools = S.isOwner && p.managed ? `<div class="sheet-actions"><button type="button" class="btn small primary" id="fEdit">Edit their cards</button></div>` : '';
   openSheet(`<h2 id="sheetTitle">${esc(p.full)}</h2>
-    <p class="meta">Base ${st.base}/300 · ${st.ins} inserts · ${p.demo ? 'demo' : ago(p.updatedAt)}</p>
+    <p class="meta">Base ${st.base}/300 · ${st.ins} inserts · ${p.demo ? 'demo' : ago(p.updatedAt)}</p>${prefPills(p)}
     ${canAsk && (sw.length || needs.length) ? `<p class="help" style="margin-top:8px">Tap one of their swaps to ask for it${p.complete ? ', or one of their needs to offer your spare' : ''}. ${esc(p.nick)} gets a request to accept or decline.</p>` : ''}
     <div id="fAsk"><h4 style="margin-top:14px">Swaps · ${sw.length}${me && p.id !== S.activeId ? ' <small>(green outline = you need it)</small>' : ''}</h4>${swChips}
     <h4 style="margin-top:14px">Needs${p.complete ? ' · ' + needs.length : ''}${me && p.id !== S.activeId && p.complete ? ' <small>(green outline = you have a spare)</small>' : ''}</h4>${needChips}
@@ -3404,15 +3499,16 @@ function openFriend(id){
       root.querySelector('#fAsk').addEventListener('click', e => { const a = e.target.closest('[data-ask]'); if (a) openOffer(a.dataset.ask, { [a.dataset.side]: [a.dataset.card] }); });
     });
 }
-function openOffer(fid, preset){
+function openOffer(fid, preset, counter){
   const me = activeDoc(); const f = getDoc(fid);
   if (!me || !f || f.demo) return;
   if (!canWriteActive()){ needJoin(); return; }
   if (fid === S.activeId) return;
   const m = computeMatch(me, f);
-  const promised = resFor(me.id).out, theirPromised = resFor(f.id).out;
-  const k = m.score;
-  let gi = 0, gv = 0;
+  const promised = resFor(me.id).out, theirPromised = { ...resFor(f.id).out };
+  // when changing their request, the cards in it aren't promised elsewhere: it's this swap
+  if (counter && counter.o) for (const id of counter.o.give) if (theirPromised[id]) theirPromised[id]--;
+  const fairOn = !!(me.fair || f.fair);
   // a tapped card goes to the top, ticked, even if the suggestions left it out
   const lift = (list, ids, owner) => {
     const out = list.slice();
@@ -3423,38 +3519,71 @@ function openOffer(fid, preset){
     }
     return out;
   };
-  const pre = preset ? new Set([...(preset.get || []), ...(preset.give || [])]) : null;
-  const row = (c, side, checked, note) => `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" ${checked ? 'checked' : ''} ${note ? 'disabled' : ''}> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}${note ? ' · ' + note : ''}</small></label></li>`;
-  const getRows = lift(m.get, preset && preset.get, f).map(c => {
-    const note = cnt(f, c.id) - 1 - (theirPromised[c.id] || 0) > 0 ? '' : 'already promised in another swap';
-    return row(c, 'get', !note && (pre ? pre.has(c.id) : gi++ < k), note);
-  }).join('');
-  const giveRows = lift(m.give, preset && preset.give, me).map(c => {
-    const free = cnt(me, c.id) - 1 - (promised[c.id] || 0);
-    const note = free > 0 ? '' : 'already in another swap';
-    return row(c, 'give', !note && (pre ? pre.has(c.id) : gv++ < k), note);
-  }).join('');
-  openSheet(`<h2 id="sheetTitle">Swap request to ${esc(f.full)}</h2>
-    <p>Tick what you'd like and what you'll give. ${esc(f.nick)} gets the request and can accept or decline. Once they accept, it goes on both your To swap lists, and cards only move when you mark it as swapped.</p>
+  const getL = lift(favFirst(m.get, me), preset && preset.get, f);
+  const giveL = lift(favFirst(m.give, f), preset && preset.give, me);
+  const getNote = c => cnt(f, c.id) - 1 - (theirPromised[c.id] || 0) > 0 ? '' : 'already promised in another swap';
+  const giveNote = c => cnt(me, c.id) - 1 - (promised[c.id] || 0) > 0 ? '' : 'already in another swap';
+  let pick;
+  if (preset) pick = new Set([...(preset.get || []), ...(preset.give || [])]);
+  else if (fairOn){ const b = balancedPick(getL.filter(c => !getNote(c)), giveL.filter(c => !giveNote(c))); pick = new Set([...b.get, ...b.give]); }
+  else {
+    pick = new Set(); let gi = 0, gv = 0;
+    for (const c of getL) if (!getNote(c) && gi < m.score){ pick.add(c.id); gi++; }
+    for (const c of giveL) if (!giveNote(c) && gv < m.score){ pick.add(c.id); gv++; }
+  }
+  const row = (c, side, note, fav) => `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" ${!note && pick.has(c.id) ? 'checked' : ''} ${note ? 'disabled' : ''}> ${fav ? `<span class="fav" title="${side === 'get' ? 'One of your teams' : 'One of their teams'}">♥</span>` : ''}<b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}${note ? ' · ' + note : ''}</small>${fairOn ? `<span class="pt">${ptsTxt(cardValue(c))}</span>` : ''}</label></li>`;
+  const getRows = getL.map(c => row(c, 'get', getNote(c), isFav(me, c))).join('');
+  const giveRows = giveL.map(c => row(c, 'give', giveNote(c), isFav(f, c))).join('');
+  const title = counter ? `Change ${f.nick}'s request` : `Swap request to ${f.full}`;
+  const intro = counter ? `Tick and untick cards, then send it back. ${f.nick} can accept it, change it again or decline.`
+    : `Tick what you'd like and what you'll give. ${f.nick} gets the request and can accept, change it or decline. Once they accept, it goes on both your To swap lists, and cards only move when you mark it as swapped.`;
+  openSheet(`<h2 id="sheetTitle">${esc(title)}</h2>
+    <p>${esc(intro)}</p>${prefPills(f)}
     <h4 style="margin-top:12px">You get from ${esc(f.nick)}</h4>${getRows ? `<ul class="scanlist">${getRows}</ul>` : '<small class="muted">Nothing they have spare that you need.</small>'}
     <h4 style="margin-top:12px">You give to ${esc(f.nick)}</h4>${giveRows ? `<ul class="scanlist">${giveRows}</ul>` : `<small class="muted">${f.complete ? 'Nothing of yours that they need.' : esc(f.nick) + " hasn't switched on their needs yet."}</small>`}
+    <div id="offerPts"></div>
+    <p class="flag" id="offerWarn" hidden></p>
     <div class="sheet-actions"><button type="button" class="btn gold" id="offerGo">Send request</button></div>`, root => {
-      root.querySelector('#offerGo').addEventListener('click', async () => {
-        const pick = side => [...root.querySelectorAll(`input[data-side="${side}"]:checked`)].map(i => i.value);
-        const get = pick('get'), give = pick('give');
+      const q = sel => root.querySelector(sel);
+      const ids = side => [...root.querySelectorAll(`input[data-side="${side}"]:checked`)].map(x => x.value);
+      let armed = false;
+      const refresh = () => {
+        const get = ids('get'), give = ids('give');
+        armed = false; q('#offerWarn').hidden = true;
+        q('#offerPts').innerHTML = fairOn && (get.length || give.length) ? ptsBarHTML(get, give) : '';
+        q('#offerGo').textContent = get.length && !give.length && f.gift ? 'Ask as a gift' : give.length && !get.length ? 'Send as a gift 🎁' : counter ? 'Send changed request' : 'Send request';
+      };
+      root.querySelectorAll('input[data-side]').forEach(x => x.addEventListener('change', refresh));
+      refresh();
+      q('#offerGo').addEventListener('click', async () => {
+        const get = ids('get'), give = ids('give');
         if (!get.length && !give.length){ toast('Tick at least one card'); return; }
-        root.querySelector('#offerGo').disabled = true;
+        const g = ptsOf(get), v = ptsOf(give);
+        let warn = '';
+        if (me.fair && get.length && give.length && v > g) warn = `You'd give ${ptsTxt(v)} for ${ptsTxt(g)}. Tick more cards to get, or tap again to send anyway.`;
+        else if (f.fair && !f.gift && get.length && g > v) warn = `${f.nick} does like-for-like swaps, and this asks for ${ptsTxt(g)} for ${ptsTxt(v)}. They might change it or say no. Tap again to send anyway.`;
+        else if (get.length && !give.length && !f.gift) warn = `You're not giving anything back, and ${f.nick} hasn't said they gift spares. Tap again to ask anyway.`;
+        if (warn && !armed){ armed = true; q('#offerWarn').textContent = warn; q('#offerWarn').hidden = false; q('#offerGo').textContent = 'Send anyway'; return; }
+        q('#offerGo').disabled = true;
         const pid = S.activeId;
         const d = mutable(pid);
         d.offers = d.offers || [];
-        d.offers.push({ id: 'o' + Math.random().toString(36).slice(2, 11), to: f.id, give, get, at: Date.now(), st: 'open' });
+        const nid = 'o' + Math.random().toString(36).slice(2, 11);
+        d.offers.push({ id: nid, to: f.id, give, get, at: Date.now(), st: 'open', ...(counter ? { re: counter.oid } : {}) });
+        if (counter){ d.replies = d.replies || {}; d.replies[counter.oid] = { s: 'declined', at: Date.now(), c: nid }; pruneReplies(d); }
         pruneOffers(d);
         S.dirty.add(pid);
         const ok = await flush(pid);
         closeSheet(); renderAll();
-        toast(ok ? `Request sent to ${f.nick}. They'll see it in their Swaps tab.` : "Request not sent yet. It'll retry.");
+        toast(!ok ? "Request not sent yet. It'll retry." : counter ? `Changed request sent to ${f.nick}.` : !get.length ? `Gift sent to ${f.nick} 🎁 They'll see it in their Swaps tab.` : `Request sent to ${f.nick}. They'll see it in their Swaps tab.`);
       });
     });
+}
+function openCounter(fromId, oid){
+  const from = getDoc(fromId);
+  const o = from && (from.offers || []).find(x => x.id === oid && x.st === 'open');
+  if (!o){ toast('That request was withdrawn'); renderAll(); return; }
+  openOffer(fromId, { get: o.give, give: o.get }, { oid, o });
 }
 async function respondOffer(fromId, offerId, accept){
   const pid = S.activeId;
@@ -3831,6 +3960,7 @@ $('#addPanel').addEventListener('input', e => { if (e.target.id === 'aiReply') r
 $('#photoInput').addEventListener('change', () => { const f = $('#photoInput').files[0]; $('#photoInput').value = ''; if (f) startScan(f); });
 $('#view-swaps').addEventListener('click', e => {
   const ak = e.target.closest('[data-ask]'); if (ak){ openOffer(ak.dataset.ask, { [ak.dataset.side]: [ak.dataset.card] }); return; }
+  const ct = e.target.closest('[data-counter]'); if (ct){ openCounter(ct.dataset.counter, ct.dataset.oid); return; }
   const of = e.target.closest('[data-offer]'); if (of){ openOffer(of.dataset.offer); return; }
   const ac = e.target.closest('[data-accept]'); if (ac){ ac.disabled = true; respondOffer(ac.dataset.accept, ac.dataset.oid, true); return; }
   const de = e.target.closest('[data-decline]'); if (de){ de.disabled = true; respondOffer(de.dataset.decline, de.dataset.oid, false); return; }
@@ -4053,7 +4183,7 @@ async function init(){
   renderAll();
   subscribe();
 }
-window.__ggn = { celebrate, cardArt, aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor, allPars, parsOf, splitAdd, PARALLELS };
+window.__ggn = { celebrate, cardArt, aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor, allPars, parsOf, splitAdd, PARALLELS, cardValue, balancedPick, readPrefs, prefScope };
 init();
 })();
 </script>
