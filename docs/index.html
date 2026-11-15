@@ -1,0 +1,2839 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Got Got Need</title>
+<style>
+:root{
+  /* Matchday-programme utility app: cobalt = got, gold = swap, cool card-stock neutrals.
+     Layout: one column, sticky header + tabs, then panels; cards shown as numbered tiles. */
+  --paper:#EDF0F6;
+  --surface:#FFFFFF;
+  --ink:#0F1B34;
+  --muted:#58637D;
+  --line:#D2D9E6;
+  --accent:#1E4FD8;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#DFE7FD;
+  --gold:#E9AE1C;
+  --gold-ink:#241A00;
+  --gold-soft:#FBF0CF;
+  --good:#17784C;
+  --bad:#BF2530;
+  --scrim:rgba(8,14,30,.48);
+  --display:"Avenir Next Condensed","Roboto Condensed","sans-serif-condensed","Arial Narrow",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --r:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0A1020; --surface:#131B2F; --ink:#E8ECF6; --muted:#97A2BD; --line:#27324C;
+    --accent:#7C9BFF; --accent-ink:#0A1020; --accent-soft:#1D2A52;
+    --gold:#F1BE45; --gold-ink:#1E1600; --gold-soft:#3A2F12;
+    --good:#4CC38A; --bad:#FF6B6B; --scrim:rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0A1020; --surface:#131B2F; --ink:#E8ECF6; --muted:#97A2BD; --line:#27324C;
+  --accent:#7C9BFF; --accent-ink:#0A1020; --accent-soft:#1D2A52;
+  --gold:#F1BE45; --gold-ink:#1E1600; --gold-soft:#3A2F12;
+  --good:#4CC38A; --bad:#FF6B6B; --scrim:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.45 var(--body);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.app{max-width:880px;margin:0 auto;padding:0 16px 56px}
+.stick{position:sticky;top:0;z-index:10;background:var(--paper);padding-top:12px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{flex:none;display:grid;place-items:center;width:38px;height:48px;border-radius:5px;background:var(--accent);color:var(--accent-ink);font:800 12px/1 var(--display);letter-spacing:.05em;transform:rotate(-5deg);box-shadow:3px 3px 0 var(--gold)}
+h1{margin:0;font:800 23px/1 var(--display);text-transform:uppercase;letter-spacing:.01em}
+h2{margin:0;font:800 18px/1.15 var(--display);text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+h3{margin:0;font:800 19px/1.15 var(--display);text-wrap:balance}
+h4{margin:0 0 6px;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.sub{margin:3px 0 0;color:var(--muted);font-size:12.5px}
+.who{flex:none;display:inline-flex;align-items:center;gap:6px;max-width:46%;min-height:36px;padding:0 12px;border-radius:18px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:13.5px;cursor:pointer}
+.who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tabs{display:flex;gap:2px;margin-top:12px;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;background:none;border:0;border-bottom:3px solid transparent;font-weight:700;font-size:14.5px;color:var(--muted);cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.count{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--gold);color:var(--gold-ink);font-size:11.5px;font-weight:800;line-height:20px;text-align:center}
+.count:empty{display:none}
+.notice{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--gold-soft);border-left:4px solid var(--gold);font-size:14px}
+.notice.bad{background:var(--surface);border-left-color:var(--bad)}
+.notice button{margin-left:6px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:12px}
+.row{display:flex;align-items:center;gap:8px}
+.between{justify-content:space-between}
+.wrap{flex-wrap:wrap}
+.muted{color:var(--muted)}
+small{font-size:12.5px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;font-size:14px;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:var(--gold-ink)}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:transparent}
+.btn.ghost{background:transparent}
+.btn.small{min-height:34px;padding:0 11px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:default}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.key,.linkbtn,.frow):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* summary */
+.stats{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:12px;margin-top:12px}
+.stat .k{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:800 28px/1.05 var(--display);font-variant-numeric:tabular-nums}
+.stat .v small{font-size:15px;color:var(--muted);font-weight:700}
+.bar{height:6px;margin-top:6px;border-radius:3px;background:var(--paper);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.toggle{display:flex;align-items:flex-start;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);cursor:pointer}
+.toggle input{appearance:none;-webkit-appearance:none;flex:none;position:relative;width:44px;height:26px;margin:0;border-radius:13px;background:var(--line);cursor:pointer;transition:background .15s}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+.toggle input:checked{background:var(--good)}
+.toggle input:checked::after{transform:translateX(18px)}
+.save{font-size:12px;color:var(--muted);white-space:nowrap}
+.save.bad{color:var(--bad);font-weight:700}
+.pill{display:inline-block;padding:1px 7px;border-radius:9px;background:var(--paper);border:1px solid var(--line);font:700 11px/16px var(--body);letter-spacing:.02em;color:var(--muted);vertical-align:middle;text-transform:none}
+.pill.good{border-color:transparent;background:var(--good);color:var(--surface)}
+.pill.gold{border-color:transparent;background:var(--gold);color:var(--gold-ink)}
+
+/* add panel */
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:9px;background:var(--paper)}
+.seg button{min-height:32px;padding:0 10px;border:0;border-radius:7px;background:none;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:12px 0;padding:4px;border-radius:10px;background:var(--paper)}
+.mode{min-height:42px;border:0;border-radius:7px;background:transparent;font-weight:800;font-size:14px;color:var(--muted);cursor:pointer}
+.mode[aria-pressed="true"][data-mode="got"]{background:var(--accent);color:var(--accent-ink)}
+.mode[aria-pressed="true"][data-mode="swap"]{background:var(--gold);color:var(--gold-ink)}
+.mode[aria-pressed="true"][data-mode="remove"]{background:var(--ink);color:var(--surface)}
+.padtop{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
+.padtop select{min-height:40px;max-width:150px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-weight:700;font-size:14px}
+.readout{display:flex;align-items:baseline;gap:10px;min-height:52px;padding:6px 12px;border-radius:8px;background:var(--paper);overflow:hidden}
+.readout b{font:800 32px/1 var(--display);font-variant-numeric:tabular-nums;min-width:2ch}
+.readout span{font-size:14px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.readout.ok span{color:var(--ink);font-weight:700}
+.readout.no span{color:var(--bad);font-weight:700}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.key{min-height:50px;border:1px solid var(--line);border-radius:9px;background:var(--surface);font:800 22px/1 var(--display);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.key:active{background:var(--paper)}
+.key.go{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font:800 16px/1 var(--body)}
+.key.go.swap{background:var(--gold);border-color:var(--gold);color:var(--gold-ink)}
+.key.go.remove{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.key:disabled{opacity:.4;cursor:default}
+.log{margin:8px 0 0;font-size:13px;color:var(--muted);min-height:1.45em}
+.entry{display:flex;gap:8px}
+.entry input{flex:1;min-width:0;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-weight:600;font-size:16px;letter-spacing:.02em}
+.preview{margin-top:10px}
+.preview .chips{margin-top:6px}
+.help{margin:8px 0 0;font-size:13px;color:var(--muted)}
+
+/* browse */
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.controls input,.controls select{min-height:42px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px;width:100%;min-width:0}
+.filters{grid-column:1 / -1;display:flex;gap:6px;flex-wrap:wrap}
+.chipbtn{min-height:34px;padding:0 12px;border:1px solid var(--line);border-radius:17px;background:var(--surface);font-weight:700;font-size:13px;cursor:pointer}
+.chipbtn[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.gridhint{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;margin:12px 0 8px;font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:7px}
+.tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:68px;padding:4px 3px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.tile .n{font:800 20px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink);opacity:.5}
+.tile .n.long{font-size:15px}
+.tile .p{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:1.1}
+.tile.got{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tile.got .n{color:var(--accent-ink);opacity:1}
+.tile.swap{background:var(--gold);border-color:var(--gold);color:var(--gold-ink)}
+.tile.swap .n{color:var(--gold-ink);opacity:1}
+.tile .b{position:absolute;top:-7px;right:-6px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:var(--ink);color:var(--surface);font:800 12px/22px var(--body);text-align:center}
+.tile .star{position:absolute;top:3px;left:5px;font-size:10px;line-height:1}
+.tile.pop{animation:pop .2s ease-out}
+@keyframes pop{from{transform:scale(.9)}to{transform:scale(1)}}
+.stepper{display:grid;grid-template-columns:64px 1fr 64px;gap:10px;align-items:center;margin-top:8px}
+.stepper output{text-align:center;font:800 42px/1 var(--display);font-variant-numeric:tabular-nums}
+.statbtn{display:block;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.statbtn .k::after{content:" ›"}
+.statbtn:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+#aiReply{width:100%;min-height:76px;margin-top:6px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px}
+.aisteps{margin:6px 0 0;padding-left:20px}
+.aisteps li{margin:8px 0}
+.stack{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:14px}
+.stack small{margin:-2px 0 8px;text-align:center}
+.linkbox{display:block;margin:8px 0;padding:10px 12px;border-radius:8px;background:var(--paper);font-weight:700;word-break:break-all}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;margin-right:5px;border-radius:3px;vertical-align:-2px;border:1px solid var(--line);background:var(--surface)}
+.legend i.got{background:var(--accent);border-color:var(--accent)}
+.legend i.swap{background:var(--gold);border-color:var(--gold)}
+
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:baseline;gap:5px;padding:3px 8px;border-radius:6px;border:1px solid var(--line);background:var(--paper);font-size:12.5px;white-space:nowrap}
+.chip b{font:800 13.5px/1.2 var(--display);font-variant-numeric:tabular-nums}
+.chip.get{background:var(--accent-soft);border-color:transparent}
+.chip.give{background:var(--gold-soft);border-color:transparent}
+.chip.bad{background:transparent;border-color:var(--bad);color:var(--bad)}
+.chip.hit{outline:2px solid var(--good);outline-offset:-2px}
+
+/* swaps */
+.partner header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.meta{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+.score{flex:none;text-align:center;min-width:64px;padding:6px 8px;border-radius:8px;background:var(--gold);color:var(--gold-ink)}
+.score b{display:block;font:800 30px/1 var(--display);font-variant-numeric:tabular-nums}
+.score span{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.score.zero{background:var(--paper);color:var(--muted)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.needrow{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.needrow:first-of-type{border-top:0}
+.needrow b{font:800 17px/1.2 var(--display);font-variant-numeric:tabular-nums;min-width:3.2ch}
+.empty{text-align:left}
+.empty p{margin:6px 0 0}
+.offer{padding:12px 0;border-top:1px solid var(--line)}
+.offer:first-of-type{border-top:0}
+.offer h4{margin-top:10px}
+.orow{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.orow:first-of-type{border-top:0}
+.count.alert{background:var(--bad);color:var(--surface)}
+.panel.inbox{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-soft)}
+.steps{margin:8px 0 0;padding-left:20px}
+.steps li{margin:4px 0}
+
+/* friends */
+.frow{display:flex;align-items:center;gap:12px;width:100%;padding:10px 0;border:0;border-top:1px solid var(--line);background:none;text-align:left;cursor:pointer}
+.frow:first-of-type{border-top:0}
+.av{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;font:800 16px/1 var(--display);color:#fff}
+.frow .t{flex:1;min-width:0}
+.frow .t b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .t small{color:var(--muted)}
+.frow .s{flex:none;text-align:right;font:800 18px/1 var(--display);font-variant-numeric:tabular-nums}
+.frow .s small{display:block;font:600 11px var(--body);color:var(--muted)}
+
+/* sheet + toast */
+.sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.scrim{position:absolute;inset:0;background:var(--scrim)}
+.sheet-card{position:relative;width:min(580px,100%);max-height:90%;overflow:auto;padding:18px 16px 22px;border-radius:14px 14px 0 0;background:var(--surface);box-shadow:0 -10px 30px rgba(0,0,0,.25)}
+@media (min-width:640px){.sheet{align-items:center}.sheet-card{border-radius:14px}}
+.sheet-card h2{font-size:21px;margin-bottom:6px}
+.sheet-card p{margin:6px 0}
+.sheet-card label.f{display:block;margin:12px 0 4px;font-weight:700;font-size:13px}
+.sheet-card input[type=text],.sheet-card textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px}
+.sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.closex{position:absolute;top:10px;right:10px;width:36px;height:36px;border:0;border-radius:50%;background:var(--paper);font-size:20px;line-height:1;cursor:pointer}
+.scanimg{display:block;max-width:100%;max-height:220px;margin:10px 0;border-radius:8px}
+.scanlist{list-style:none;margin:10px 0 0;padding:0}
+.scanlist li{border-top:1px solid var(--line)}
+.scanlist label{display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer}
+.scanlist input{width:20px;height:20px}
+.flag{color:var(--bad);font-weight:700;font-size:12px}
+.setchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.setchips label{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);border-radius:16px;font-size:13px;cursor:pointer}
+.setchips input{margin:0}
+.toast{position:fixed;left:50%;bottom:18px;z-index:60;display:flex;align-items:center;gap:14px;max-width:calc(100% - 32px);padding:10px 14px;border-radius:10px;background:var(--ink);color:var(--surface);font-weight:600;font-size:14px;transform:translateX(-50%);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast[hidden]{display:none}
+.toast{pointer-events:none}
+.toast button{pointer-events:auto;flex:none;background:none;border:0;color:var(--gold);font-weight:800;cursor:pointer}
+@media (max-width:420px){
+  .stats{grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+  .cols{grid-template-columns:1fr}
+  .controls{grid-template-columns:1fr}
+  h1{font-size:21px}
+}
+@media (prefers-reduced-motion:reduce){
+  .tile.pop{animation:none}
+  .toggle input,.toggle input::after{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stick">
+    <header class="top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">GGN</div>
+        <div>
+          <h1>Got Got Need</h1>
+          <p class="sub">Topps Premier League 2026/27 card swaps</p>
+        </div>
+      </div>
+      <button type="button" class="who" id="who" aria-haspopup="dialog"><span id="whoName">Loading…</span><span aria-hidden="true">▾</span></button>
+    </header>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" id="tab-cards" aria-controls="view-cards" aria-selected="true" data-tab="cards">My cards</button>
+      <button type="button" role="tab" id="tab-swaps" aria-controls="view-swaps" aria-selected="false" data-tab="swaps">Swaps <span class="count" id="swapsCount"></span></button>
+      <button type="button" role="tab" id="tab-friends" aria-controls="view-friends" aria-selected="false" data-tab="friends">Friends <span class="count" id="friendsCount"></span></button>
+    </nav>
+  </div>
+  <div id="notice" class="notice" hidden></div>
+
+  <main>
+    <section id="view-cards" role="tabpanel" aria-labelledby="tab-cards">
+      <div class="panel" id="summary"></div>
+
+      <div class="panel" id="addPanel">
+        <div class="row between wrap">
+          <h2>Add cards</h2>
+          <div class="seg" role="tablist" aria-label="How to add">
+            <button type="button" role="tab" id="am-pad" aria-selected="true" data-am="pad">Number pad</button>
+            <button type="button" role="tab" id="am-list" aria-selected="false" data-am="list">Type a list</button>
+            <button type="button" role="tab" id="am-photo" aria-selected="false" data-am="photo">Photo</button>
+          </div>
+        </div>
+        <div class="modes" role="group" aria-label="What adding does">
+          <button type="button" class="mode" data-mode="got" aria-pressed="false">Got it</button>
+          <button type="button" class="mode" data-mode="swap" aria-pressed="true">+ Swap</button>
+          <button type="button" class="mode" data-mode="remove" aria-pressed="false">Remove</button>
+        </div>
+
+        <div id="pane-pad">
+          <div class="padtop">
+            <label class="sr" for="padSet">Card set</label>
+            <select id="padSet"></select>
+            <div class="readout" id="readout" aria-live="polite"><b id="padNum">–</b><span id="padName">Number 1–300</span></div>
+          </div>
+          <div class="keypad" id="keypad">
+            <button type="button" class="key" data-k="1">1</button>
+            <button type="button" class="key" data-k="2">2</button>
+            <button type="button" class="key" data-k="3">3</button>
+            <button type="button" class="key" data-k="4">4</button>
+            <button type="button" class="key" data-k="5">5</button>
+            <button type="button" class="key" data-k="6">6</button>
+            <button type="button" class="key" data-k="7">7</button>
+            <button type="button" class="key" data-k="8">8</button>
+            <button type="button" class="key" data-k="9">9</button>
+            <button type="button" class="key" data-k="back" aria-label="Delete last digit">⌫</button>
+            <button type="button" class="key" data-k="0">0</button>
+            <button type="button" class="key go" data-k="go" id="padGo" disabled>Add</button>
+          </div>
+          <p class="log" id="padLog">Flip through your pile and punch in each number. Same number twice = two copies.</p>
+        </div>
+
+        <div id="pane-list" hidden>
+          <form id="entryForm" class="entry" autocomplete="off">
+            <label class="sr" for="entry">Card numbers</label>
+            <input id="entry" type="text" placeholder="12 45 101-105 AK1 8B7x2" autocapitalize="characters" spellcheck="false" enterkeyhint="done">
+            <button id="entryBtn" class="btn primary" type="submit" disabled>Add</button>
+          </form>
+          <p class="help">Separate with spaces or commas. Ranges like <b>101-105</b> work, insert codes like <b>AK1</b> or <b>RT12</b>, and <b>x2</b> for two copies. Pasting a friend's WhatsApp list works too.</p>
+          <div id="preview" class="preview" aria-live="polite"></div>
+        </div>
+
+        <div id="pane-photo" hidden>
+          <div id="photoBody"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="browse">
+        <div class="controls">
+          <label class="sr" for="search">Find a card</label>
+          <input id="search" type="search" placeholder="Find a player, club or number">
+          <label class="sr" for="section">Section</label>
+          <select id="section"></select>
+          <div class="filters" role="group" aria-label="Show">
+            <button type="button" class="chipbtn" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="chipbtn" data-filter="need" aria-pressed="false">Need</button>
+            <button type="button" class="chipbtn" data-filter="got" aria-pressed="false">Got</button>
+            <button type="button" class="chipbtn" data-filter="swap" aria-pressed="false">Swaps</button>
+          </div>
+        </div>
+        <div class="gridhint" id="gridHint"></div>
+        <div class="grid" id="grid"></div>
+        <div class="legend" aria-hidden="true"><span><i></i>Need</span><span><i class="got"></i>Got</span><span><i class="swap"></i>Swap (+ = spares)</span><span>★ Case hit or short print</span></div>
+      </div>
+    </section>
+
+    <section id="view-swaps" role="tabpanel" aria-labelledby="tab-swaps" hidden></section>
+    <section id="view-friends" role="tabpanel" aria-labelledby="tab-friends" hidden></section>
+  </main>
+</div>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="scrim" data-close></div>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <button type="button" class="closex" data-close aria-label="Close">×</button>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" hidden><span id="toastMsg"></span><button type="button" id="toastUndo" hidden>Undo</button></div>
+<input type="file" id="photoInput" accept="image/*" hidden>
+
+<script src="vendor/firebase-12.19.0.js"></script>
+<script src="config.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ===================== Checklist: Topps Flagship Premier League 2026/27 ===================== */
+const CLUBS = {
+  ARS:["Arsenal","Arsenal","#C8102E"], AVL:["Aston Villa","Villa","#7A263A"], BOU:["AFC Bournemouth","Bournemouth","#B50E12"],
+  BRE:["Brentford","Brentford","#D20000"], BHA:["Brighton & Hove Albion","Brighton","#0057B8"], CHE:["Chelsea","Chelsea","#034694"],
+  CRY:["Crystal Palace","Palace","#1B458F"], EVE:["Everton","Everton","#003399"], FUL:["Fulham","Fulham","#3A3A3A"],
+  LEE:["Leeds United","Leeds","#1D428A"], LIV:["Liverpool","Liverpool","#C8102E"], MCI:["Manchester City","Man City","#4A8FCB"],
+  MUN:["Manchester United","Man Utd","#DA291C"], NEW:["Newcastle United","Newcastle","#241F20"], NFO:["Nottingham Forest","Forest","#DD0000"],
+  SUN:["Sunderland","Sunderland","#EB172B"], TOT:["Tottenham Hotspur","Spurs","#132257"], COV:["Coventry City","Coventry","#3E9DD6"],
+  IPS:["Ipswich Town","Ipswich","#3A64A3"], HUL:["Hull City","Hull","#F5A12D"]
+};
+const CLUB_ORDER = Object.keys(CLUBS);
+
+/* Line n = card n. Trailing * = rookie card. Cards 1-20 are Future Stars. */
+const BASE_RAW = `Max Dowman|ARS
+Jamaldeen Jimoh-Aloba|AVL
+Veljko Milosavljević|BOU
+Junior Kroupi|BOU
+Yasin Ayari|BHA
+Stefanos Tzimas|BHA
+Reggie Walsh|CHE
+Estêvão Willian|CHE
+Dastan Satpayev|CHE
+Romain Esse|CRY
+Joél Drakes-Thomas|CRY
+Josh King|FUL
+Harry Gray|LEE
+Giovanni Leoni|LIV
+Rio Ngumoha|LIV
+Divine Mukasa|MCI
+Jack Fletcher|MUN
+Shea Lacey|MUN
+Igor Jesus|NFO
+Chris Rigg|SUN
+William Saliba|ARS
+Gabriel Magalhães|ARS
+Jaden Dixon*|ARS
+Jurriën Timber|ARS
+Myles Lewis-Skelly|ARS
+Martín Zubimendi|ARS
+Ife Ibrahim*|ARS
+Declan Rice|ARS
+Martin Ødegaard|ARS
+Eberechi Eze|ARS
+Gabriel Martinelli|ARS
+Bukayo Saka|ARS
+Viktor Gyökeres|ARS
+Brando Bailey-Joseph*|ARS
+Pau Torres|AVL
+Ezri Konsa|AVL
+Matty Cash|AVL
+Lamare Bogarde|AVL
+Ian Maatsen|AVL
+Boubacar Kamara|AVL
+Amadou Onana|AVL
+Youri Tielemans|AVL
+John McGinn|AVL
+Morgan Rogers|AVL
+Alysson*|AVL
+Brian Madjo*|AVL
+Tammy Abraham|AVL
+Ollie Watkins|AVL
+Bafodé Diakité|BOU
+Julio Soler|BOU
+Adrien Truffert|BOU
+Tyler Adams|BOU
+Marcus Tavernier|BOU
+Alex Scott|BOU
+David Brooks|BOU
+Alex Tóth*|BOU
+Lewis Cook|BOU
+Amine Adli|BOU
+Ben Gannon-Doak|BOU
+Justin Kluivert|BOU
+Rayan*|BOU
+Evanilson|BOU
+Nathan Collins|BRE
+Sepp van den Berg|BRE
+Michael Kayode|BRE
+Yunus Konak|BRE
+Antoni Milambo|BRE
+Mathias Jensen|BRE
+Jordan Henderson|BRE
+Mikkel Damsgaard|BRE
+Yehor Yarmolyuk|BRE
+Kaye Furo*|BRE
+Kevin Schade|BRE
+Keane Lewis-Potter|BRE
+Igor Thiago|BRE
+Dango Ouattara|BRE
+Jan Paul van Hecke|BHA
+Ferdi Kadıoğlu|BHA
+Lewis Dunk|BHA
+Diego Coppola|BHA
+Jack Hinshelwood|BHA
+Carlos Baleba|BHA
+Diego Gómez|BHA
+Mats Wieffer|BHA
+Pascal Groß|BHA
+Kaoru Mitoma|BHA
+Charalampos Kostoulas|BHA
+Danny Welbeck|BHA
+Georginio Rutter|BHA
+Yankuba Minteh|BHA
+Jorrel Hato|CHE
+Reece James|CHE
+Marc Cucurella|CHE
+Malo Gusto|CHE
+Moisés Caicedo|CHE
+Enzo Fernández|CHE
+Landon Emenalo*|CHE
+Andrey Santos|CHE
+Jesse Derry*|CHE
+Pedro Neto|CHE
+Alejandro Garnacho|CHE
+Ryan Kavuma-McQueen*|CHE
+João Pedro|CHE
+Cole Palmer|CHE
+Tyrick Mitchell|CRY
+Maxence Lacroix|CRY
+Chadi Riad|CRY
+Dean Benamar*|CRY
+Chris Richards|CRY
+Daniel Muñoz|CRY
+Justin Devenny|CRY
+Adam Wharton|CRY
+Yéremy Pino|CRY
+Brennan Johnson|CRY
+Ismaïla Sarr|CRY
+Eddie Nketiah|CRY
+Jørgen Strand Larsen|CRY
+Jean-Philippe Mateta|CRY
+James Tarkowski|EVE
+Jarrad Branthwaite|EVE
+Adam Aznou|EVE
+Jake O'Brien|EVE
+Vitalii Mykolenko|EVE
+Charly Alcaraz|EVE
+Tim Iroegbunam|EVE
+Kiernan Dewsbury-Hall|EVE
+James Garner|EVE
+Tyler Dibling|EVE
+Dwight McNeil|EVE
+Iliman Ndiaye|EVE
+Beto|EVE
+Thierno Barry|EVE
+Calvin Bassey|FUL
+Joachim Andersen|FUL
+Antonee Robinson|FUL
+Kenny Tete|FUL
+Timothy Castagne|FUL
+Saša Lukić|FUL
+Sander Berge|FUL
+Alex Iwobi|FUL
+Seth Ridgeon*|FUL
+Emile Smith Rowe|FUL
+Oscar Bobb|FUL
+Aaron Loupalo-Bi*|FUL
+Kevin|FUL
+Rodrigo Muniz|FUL
+Joe Rodon|LEE
+Pascal Struijk|LEE
+Jayden Bogle|LEE
+Ethan Ampadu|LEE
+Gabriel Gudmundsson|LEE
+Sean Longstaff|LEE
+Ao Tanaka|LEE
+Brenden Aaronson|LEE
+Anton Stach|LEE
+Lukas Nmecha|LEE
+Wilfried Gnonto|LEE
+Daniel James|LEE
+Noah Okafor|LEE
+Dominic Calvert-Lewin|LEE
+Jérémy Jacquet*|LIV
+Virgil van Dijk|LIV
+Milos Kerkez|LIV
+Jeremie Frimpong|LIV
+Conor Bradley|LIV
+Ryan Gravenberch|LIV
+Alexis Mac Allister|LIV
+Dominik Szoboszlai|LIV
+Curtis Jones|LIV
+Florian Wirtz|LIV
+Keyrol Figueroa*|LIV
+Cody Gakpo|LIV
+Hugo Ekitike|LIV
+Alexander Isak|LIV
+Marc Guéhi|MCI
+Rúben Dias|MCI
+Joško Gvardiol|MCI
+Nico O'Reilly|MCI
+Floyd Samba*|MCI
+Tijjani Reijnders|MCI
+Rodri|MCI
+Jérémy Doku|MCI
+Phil Foden|MCI
+Rayan Cherki|MCI
+Antoine Semenyo|MCI
+Ryan McAidoo*|MCI
+Omar Marmoush|MCI
+Erling Haaland|MCI
+Tyler Fredricson*|MUN
+Leny Yoro|MUN
+Lisandro Martínez|MUN
+Ayden Heaven|MUN
+Patrick Dorgu|MUN
+Godwill Kukonki*|MUN
+Kobbie Mainoo|MUN
+Bruno Fernandes|MUN
+Tyler Fletcher*|MUN
+JJ Gabriel*|MUN
+Matheus Cunha|MUN
+Amad|MUN
+Bryan Mbeumo|MUN
+Benjamin Šeško|MUN
+Sven Botman|NEW
+Malick Thiaw|NEW
+Tino Livramento|NEW
+Lewis Hall|NEW
+Dan Burn|NEW
+Jacob Ramsey|NEW
+Sandro Tonali|NEW
+Joelinton|NEW
+Bruno Guimarães|NEW
+Sean Neave*|NEW
+Harvey Barnes|NEW
+Yoane Wissa|NEW
+Nick Woltemade|NEW
+Anthony Elanga|NEW
+Nikola Milenković|NFO
+Nicolò Savona|NFO
+Murillo|NFO
+Luca Netz|NFO
+Neco Williams|NFO
+Ola Aina|NFO
+James McAtee|NFO
+Elliot Anderson|NFO
+Morgan Gibbs-White|NFO
+Ryan Yates|NFO
+Omari Hutchinson|NFO
+Callum Hudson-Odoi|NFO
+Dan Ndoye|NFO
+Chris Wood|NFO
+Trai Hume|SUN
+Reinildo Mandava|SUN
+Omar Alderete|SUN
+Nordi Mukiele|SUN
+Habib Diarra|SUN
+Granit Xhaka|SUN
+Noah Sadiki|SUN
+Enzo Le Fée|SUN
+Nilson Angulo|SUN
+Timur Tutierov*|SUN
+Brian Brobbey|SUN
+Chemsdine Talbi|SUN
+Eliezer Mayenda|SUN
+Wilson Isidor|SUN
+Pedro Porro|TOT
+Micky van de Ven|TOT
+Cristian Romero|TOT
+Souza*|TOT
+Djed Spence|TOT
+Archie Gray|TOT
+Conor Gallagher|TOT
+Dejan Kulusevski|TOT
+Lucas Bergvall|TOT
+Xavi Simons|TOT
+Lucá Williams-Barnett*|TOT
+James Maddison|TOT
+Mohammed Kudus|TOT
+Dominic Solanke|TOT
+Milan van Ewijk|COV
+Jay Dasilva|COV
+Liam Kitching*|COV
+Bobby Thomas*|COV
+Joel Latibeaudiere*|COV
+Matt Grimes|COV
+Victor Torp|COV
+Jack Rudoni|COV
+Josh Eccles*|COV
+Ellis Simms|COV
+Brandon Thomas-Asante|COV
+Tatsuhiro Sakamoto|COV
+Ephron Mason-Clark*|COV
+Haji Wright|COV
+Dara O'Shea|IPS
+Darnell Furlong|IPS
+Leif Davis|IPS
+Cédric Kipré|IPS
+Jacob Greaves|IPS
+Ben Johnson|IPS
+Azor Matusiwa|IPS
+Jack Taylor*|IPS
+Marcelino Núñez|IPS
+Kasey McAteer|IPS
+Sindre Walle Egeli|IPS
+Jaden Philogene|IPS
+George Hirst|IPS
+Jack Clarke|IPS
+John Egan|HUL
+Charlie Hughes|HUL
+Lewie Coyle|HUL
+Ryan Giles|HUL
+Semi Ajayi|HUL
+Cody Drameh|HUL
+Darko Gyabi*|HUL
+Regan Slater*|HUL
+Matt Crooks|HUL
+David Akintola*|HUL
+Liam Millar|HUL
+Mohamed Belloumi*|HUL
+Kyle Joseph*|HUL
+Oli McBurnie|HUL`;
+
+/* [code, name, note, rare, list] — list line n = card code+n */
+const SET_DEFS = [
+["8B","8-Bit Ballers","",0,`Santi Cazorla|ARS
+Olivier Giroud|ARS
+Darren Bent|AVL
+Simon Francis|BOU
+James Milner|BHA
+Petr Čech|CHE
+David Luiz|CHE
+Daniel Sturridge|CHE
+Yannick Bolasie|CRY
+Yakubu|EVE
+Clint Dempsey|FUL
+Steven Gerrard|LIV
+Fernando Torres|LIV
+David Silva|MCI
+Yaya Touré|MCI
+Nani|MUN
+Kevin Nolan|NEW
+Papiss Cissé|NEW
+Obafemi Martins|NEW
+John O'Shea|SUN`],
+["RTN","Remember The Name","",0,`Didier Drogba|CHE
+Rio Ngumoha|LIV
+Mario Balotelli|MCI
+Sergio Agüero|MCI
+Wayne Rooney|MUN`],
+["RT","Retro Threads","",0,`Paul Merson|ARS
+Dwight Yorke|AVL
+Dion Dublin|AVL
+Glenn Murray|BOU
+Mathias Jensen|BRE
+Danny Welbeck|BHA
+Marcel Desailly|CHE
+Ruud Gullit|CHE
+Gábor Király|CRY
+Attilio Lombardo|CRY
+James Rodríguez|EVE
+Duncan Ferguson|EVE
+Bobby Zamora|FUL
+Dimitar Berbatov|FUL
+Steve McManaman|LIV
+Robbie Fowler|LIV
+Samir Nasri|MCI
+Shaun Wright-Phillips|MCI
+Craig Bellamy|MCI
+Gary Pallister|MUN
+Ryan Giggs|MUN
+Federico Macheda|MUN
+Les Ferdinand|NEW
+Claudio Reyna|SUN
+Djibril Cissé|SUN`],
+["CC","Chrome Classics","",0,`Ian Wright|ARS
+Juan Pablo Ángel|AVL
+Gabriel Agbonlahor|AVL
+Jermain Defoe|BOU
+Danny Welbeck|BHA
+Thiago Silva|CHE
+Eden Hazard|CHE
+Eidur Gudjohnsen|CHE
+Iain Dowie|CRY
+Wilfried Zaha|CRY
+Duncan Ferguson|EVE
+Steed Malbranque|FUL
+Brian McBride|FUL
+John Barnes|LIV
+Roberto Firmino|LIV
+Nicolas Anelka|LIV
+Pablo Zabaleta|MCI
+Yaya Touré|MCI
+Riyad Mahrez|MCI
+Roy Keane|MUN
+Robin Van Persie|MUN
+Alexis Sánchez|MUN
+Alan Shearer|NEW
+Patrick Kluivert|NEW
+Kevin Phillips|SUN`],
+["SPL","Stars of the Premier League","",0,`Jurriën Timber|ARS
+Declan Rice|ARS
+Youri Tielemans|AVL
+Justin Kluivert|BOU
+Nathan Collins|BRE
+Pascal Groß|BHA
+Reece James|CHE
+Enzo Fernández|CHE
+Adam Wharton|CRY
+Jarrad Branthwaite|EVE
+Emile Smith Rowe|FUL
+Brenden Aaronson|LEE
+Ryan Gravenberch|LIV
+Alexis Mac Allister|LIV
+Marc Guéhi|MCI
+Rodri|MCI
+Kobbie Mainoo|MUN
+Bryan Mbeumo|MUN
+Jacob Ramsey|NEW
+Yoane Wissa|NEW
+Elliot Anderson|NFO
+Granit Xhaka|SUN
+Xavi Simons|TOT
+Jack Rudoni|COV
+Ellis Simms|COV`],
+["FF","Flying The Flag","",0,`William Saliba|ARS
+Martin Ødegaard|ARS
+Amadou Onana|AVL
+Emiliano Buendía|AVL
+Amine Adli|BOU
+Mikkel Damsgaard|BRE
+Diego Gómez|BHA
+Kaoru Mitoma|BHA
+Moisés Caicedo|CHE
+João Pedro|CHE
+Ismaïla Sarr|CRY
+Jørgen Strand Larsen|CRY
+Beto|EVE
+Antonee Robinson|FUL
+Ethan Ampadu|LEE
+Virgil van Dijk|LIV
+Joško Gvardiol|MCI
+Phil Foden|MCI
+Diogo Dalot|MUN
+Malick Thiaw|NEW
+Sandro Tonali|NEW
+Chris Wood|NFO
+Noah Sadiki|SUN
+Pedro Porro|TOT
+Brandon Thomas-Asante|COV`],
+["HP","Home Pitch","",0,`Max Dowman|ARS
+Bukayo Saka|ARS
+Ollie Watkins|AVL
+Tyler Adams|BOU
+Kevin Schade|BRE
+Yankuba Minteh|BHA
+Eden Hazard|CHE
+Brennan Johnson|CRY
+Iliman Ndiaye|EVE
+Alex Iwobi|FUL
+Brenden Aaronson|LEE
+Roberto Firmino|LIV
+Rayan Cherki|MCI
+Mario Balotelli|MCI
+Bryan Mbeumo|MUN
+Edinson Cavani|MUN
+Sandro Tonali|NEW
+Igor Jesus|NFO
+Granit Xhaka|SUN
+Lucas Bergvall|TOT`],
+["NB","Nitro Boost","",0,`Noni Madueke|ARS
+Brando Bailey-Joseph|ARS
+Alysson|AVL
+Marcus Tavernier|BOU
+Michael Kayode|BRE
+Yankuba Minteh|BHA
+Pedro Neto|CHE
+Jamie Gittens|CHE
+Daniel Muñoz|CRY
+Thierno Barry|EVE
+Oscar Bobb|FUL
+Wilfried Gnonto|LEE
+Jeremie Frimpong|LIV
+Rio Ngumoha|LIV
+Savinho|MCI
+Omar Marmoush|MCI
+Amad|MUN
+Jacob Murphy|NEW
+Anthony Elanga|NEW
+Omari Hutchinson|NFO
+Chemsdine Talbi|SUN
+Micky van de Ven|TOT
+Ephron Mason-Clark|COV
+Sindre Walle Egeli|IPS
+Matt Crooks|HUL`],
+["PS","Perfect Storm","",0,`Declan Rice|ARS
+Brian Madjo|AVL
+Junior Kroupi|BOU
+Kaye Furo|BRE
+Diego Gómez|BHA
+Cole Palmer|CHE
+Yéremy Pino|CRY
+Tyler Dibling|EVE
+Oscar Bobb|FUL
+Dominic Calvert-Lewin|LEE
+Florian Wirtz|LIV
+Fernando Torres|LIV
+Antoine Semenyo|MCI
+Matheus Cunha|MUN
+Eric Cantona|MUN
+Nick Woltemade|NEW
+Morgan Gibbs-White|NFO
+Brian Brobbey|SUN
+Xavi Simons|TOT
+Haji Wright|COV`],
+["TR","The Rise","",0,`Thierry Henry|ARS
+Frank Lampard|CHE
+Clint Dempsey|FUL
+Steven Gerrard|LIV
+Mohamed Salah|LIV
+Kevin De Bruyne|MCI
+David Beckham|MUN
+Wayne Rooney|MUN
+Nolberto Solano|NEW
+Gareth Bale|TOT`],
+["BM","Beast Mode","",0,`Max Dowman|ARS
+Bukayo Saka|ARS
+Ollie Watkins|AVL
+Brian Madjo|AVL
+Junior Kroupi|BOU
+Igor Thiago|BRE
+Charalampos Kostoulas|BHA
+Estêvão Willian|CHE
+Dastan Satpayev|CHE
+Jørgen Strand Larsen|CRY
+Iliman Ndiaye|EVE
+Josh King|FUL
+Lukas Nmecha|LEE
+Dominik Szoboszlai|LIV
+Alexander Isak|LIV
+Gianluigi Donnarumma|MCI
+Erling Haaland|MCI
+Matheus Cunha|MUN
+Benjamin Šeško|MUN
+Bruno Guimarães|NEW
+Joelinton|NEW
+Morgan Gibbs-White|NFO
+Brian Brobbey|SUN
+Conor Gallagher|TOT
+Kasey McAteer|IPS`],
+["GL","Gold Lion","Starter pack",0,`Declan Rice|ARS
+Max Dowman|ARS
+Thierry Henry|ARS
+Morgan Rogers|AVL
+Rayan|BOU
+Igor Thiago|BRE
+Cole Palmer|CHE
+Estêvão Willian|CHE
+Wayne Rooney|EVE
+Steven Gerrard|LIV
+Florian Wirtz|LIV
+Kevin De Bruyne|MCI
+Antoine Semenyo|MCI
+Erling Haaland|MCI
+Bruno Fernandes|MUN
+David Beckham|MUN
+JJ Gabriel|MUN
+Bruno Guimarães|NEW
+Alan Shearer|NEW
+Harry Kane|TOT`],
+["VI","Vibes","Mega Multipack",0,`Viktor Gyökeres|ARS
+Ollie Watkins|AVL
+Charalampos Kostoulas|BHA
+Marc Cucurella|CHE
+Jean-Philippe Mateta|CRY
+Alex Iwobi|FUL
+Hugo Ekitike|LIV
+Erling Haaland|MCI
+Patrick Dorgu|MUN
+Chemsdine Talbi|SUN`],
+["PT","Perfect 10","Eco Pack",0,`Eberechi Eze|ARS
+Cole Palmer|CHE
+Eden Hazard|CHE
+Iliman Ndiaye|EVE
+Philippe Coutinho|LIV
+Rayan Cherki|MCI
+Sergio Agüero|MCI
+Matheus Cunha|MUN
+Wayne Rooney|MUN
+Harry Kane|TOT`],
+["OF","On Fire","Mega & Super Tins",0,`Tijjani Reijnders|MCI
+Moisés Caicedo|CHE
+Sandro Tonali|NEW
+Kevin Schade|BRE
+Gabriel Martinelli|ARS
+Bryan Mbeumo|MUN
+Bukayo Saka|ARS
+Evanilson|BOU
+João Pedro|CHE
+Ezri Konsa|AVL
+Bruno Fernandes|MUN
+Antoine Semenyo|MCI
+Noah Okafor|LEE
+Virgil van Dijk|LIV
+Bruno Guimarães|NEW`],
+["MA","Mayhem","Blaster box",0,`Gabriel Magalhães|ARS
+Gabriel Martinelli|ARS
+Evanilson|BOU
+Dango Ouattara|BRE
+Yasin Ayari|BHA
+Jesse Derry|CHE
+Alejandro Garnacho|CHE
+Yéremy Pino|CRY
+Kevin|FUL
+Noah Okafor|LEE
+Jeremie Frimpong|LIV
+Dominik Szoboszlai|LIV
+Jérémy Doku|MCI
+Godwill Kukonki|MUN
+Benjamin Šeško|MUN
+Harvey Barnes|NEW
+Igor Jesus|NFO
+Enzo Le Fée|SUN
+Lucas Bergvall|TOT
+Haji Wright|COV`],
+["BE","Black Edge","Black Edge packs",0,`Eberechi Eze|ARS
+Max Dowman|ARS
+Gabriel Martinelli|ARS
+Morgan Rogers|AVL
+Tammy Abraham|AVL
+Gabriel Agbonlahor|AVL
+Evanilson|BOU
+Rayan|BOU
+Igor Thiago|BRE
+Kaye Furo|BRE
+Kaoru Mitoma|BHA
+Georginio Rutter|BHA
+Estêvão Willian|CHE
+João Pedro|CHE
+Gianfranco Zola|CHE
+Diego Costa|CHE
+Ismaïla Sarr|CRY
+Brennan Johnson|CRY
+Yannick Bolasie|CRY
+Jean-Philippe Mateta|CRY
+Paul Gascoigne|EVE
+Thierno Barry|EVE
+Iliman Ndiaye|EVE
+Kevin|FUL
+Noah Okafor|LEE
+Dominic Calvert-Lewin|LEE
+Jérémy Jacquet|LIV
+Philippe Coutinho|LIV
+Luis Suárez|LIV
+Alexander Isak|LIV
+Hugo Ekitike|LIV
+Kevin De Bruyne|MCI
+Phil Foden|MCI
+Antoine Semenyo|MCI
+David Beckham|MUN
+Bruno Fernandes|MUN
+Amad|MUN
+Zlatan Ibrahimović|MUN
+JJ Gabriel|MUN
+Bruno Guimarães|NEW
+Nick Woltemade|NEW
+David Ginola|NEW
+Igor Jesus|NFO
+Chris Rigg|SUN
+Wilson Isidor|SUN
+Edgar Davids|TOT
+Mohammed Kudus|TOT
+Harry Kane|TOT
+Ellis Simms|COV
+Tatsuhiro Sakamoto|COV`],
+["GB","Golden Boot","",0,`Thierry Henry 2005/06|ARS
+Didier Drogba 2006/07|CHE
+Mohamed Salah 2024/25|LIV
+Luis Suárez 2013/14|LIV
+Carlos Tevez 2010/11|MCI
+Erling Haaland 2023/24|MCI
+Robin Van Persie 2012/13|MUN
+Alan Shearer 1996/97|NEW
+Kevin Phillips 1999/00|SUN`],
+["SGL","True Gold Lion","",0,`Declan Rice|ARS
+Max Dowman|ARS
+Thierry Henry|ARS
+Morgan Rogers|AVL
+Rayan|BOU
+Igor Thiago|BRE
+Cole Palmer|CHE
+Estêvão Willian|CHE
+Wayne Rooney|EVE
+Steven Gerrard|LIV
+Florian Wirtz|LIV
+Kevin De Bruyne|MCI
+Antoine Semenyo|MCI
+Erling Haaland|MCI
+Bruno Fernandes|MUN
+David Beckham|MUN
+JJ Gabriel|MUN
+Bruno Guimarães|NEW
+Alan Shearer|NEW
+Harry Kane|TOT`],
+["BB","Billboard Material","Case hit",1,`Martin Ødegaard|ARS
+Max Dowman|ARS
+Morgan Rogers|AVL
+Rayan|BOU
+Igor Thiago|BRE
+Danny Welbeck|BHA
+Ryan Kavuma-McQueen|CHE
+Estêvão Willian|CHE
+Joél Drakes-Thomas|CRY
+Charly Alcaraz|EVE
+Kevin|FUL
+Brenden Aaronson|LEE
+Florian Wirtz|LIV
+Alexander Isak|LIV
+Phil Foden|MCI
+Jérémy Doku|MCI
+Benjamin Šeško|MUN
+Amad|MUN
+Bruno Guimarães|NEW
+Omari Hutchinson|NFO
+Eliezer Mayenda|SUN
+Mohammed Kudus|TOT
+Jack Rudoni|COV
+George Hirst|IPS
+Oli McBurnie|HUL`],
+["CD","Carpe Diem","Case hit",1,`Viktor Gyökeres|ARS
+Thierry Henry|ARS
+Morgan Rogers|AVL
+Ollie Watkins|AVL
+Frank Lampard|CHE
+João Pedro|CHE
+Erling Haaland|MCI
+Bruno Fernandes|MUN
+Wayne Rooney|MUN
+Granit Xhaka|SUN`],
+["QU","Quasar","Case hit",1,`Eberechi Eze|ARS
+Alex Tóth|BOU
+Dango Ouattara|BRE
+Carlos Baleba|BHA
+Pedro Neto|CHE
+Jean-Philippe Mateta|CRY
+Kiernan Dewsbury-Hall|EVE
+Oscar Bobb|FUL
+Noah Okafor|LEE
+Rio Ngumoha|LIV
+Charlie Gray|MCI
+Tijjani Reijnders|MCI
+Bryan Mbeumo|MUN
+Sean Neave|NEW
+Dan Ndoye|NFO`],
+["AK","All Kings","Short print",1,`Bukayo Saka|ARS
+Morgan Rogers|AVL
+Igor Thiago|BRE
+Estêvão Willian|CHE
+Josh King|FUL
+Jérémy Jacquet|LIV
+Erling Haaland|MCI
+Bruno Fernandes|MUN
+JJ Gabriel|MUN
+Morgan Gibbs-White|NFO`],
+["UBM","Ultra Beast Mode","Short print",1,`Bukayo Saka|ARS
+Brian Madjo|AVL
+Igor Thiago|BRE
+Estêvão Willian|CHE
+Iliman Ndiaye|EVE
+Dominik Szoboszlai|LIV
+Gianluigi Donnarumma|MCI
+Erling Haaland|MCI
+Matheus Cunha|MUN
+Bruno Guimarães|NEW`],
+["DR","Diamond Rookies","Short print",1,`Brian Madjo|AVL
+Rayan|BOU
+Jesse Derry|CHE
+Jérémy Jacquet|LIV
+JJ Gabriel|MUN`]
+];
+
+const ALL = [], BY_ID = new Map(), SETS = [], SET_BY_CODE = {};
+const PARTICLES = new Set(['van','de','den','der','da','dos','di','le','la','mac','el','ten']);
+function shortName(full){
+  const w = full.replace(/\s+\d{4}\/\d{2}$/, '').split(/\s+/);
+  if (w.length === 1) return w[0];
+  let i = w.length - 1;
+  while (i > 1 && PARTICLES.has(w[i - 1].toLowerCase())) i--;
+  return w.slice(i).join(' ');
+}
+function fold(s){
+  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[Øø]/g, 'o').replace(/ß/g, 'ss').replace(/[Ææ]/g, 'ae').replace(/ı/g, 'i').replace(/[Łł]/g, 'l')
+    .toLowerCase();
+}
+function addCard(c){
+  c.short = shortName(c.name);
+  c.key = fold(c.name + ' ' + CLUBS[c.club][0] + ' ' + CLUBS[c.club][1]);
+  ALL.push(c); BY_ID.set(c.id, c);
+}
+BASE_RAW.trim().split('\n').forEach((line, i) => {
+  let [name, club] = line.split('|');
+  const rc = name.endsWith('*'); if (rc) name = name.slice(0, -1);
+  addCard({ id: String(i + 1), set: 'base', num: i + 1, name, club, rc, fs: i < 20, rare: false });
+});
+for (const [code, name, note, rare, raw] of SET_DEFS){
+  const s = { code, name, note, rare: !!rare, ids: [] };
+  raw.trim().split('\n').forEach((line, i) => {
+    const [pname, club] = line.split('|');
+    const id = code + (i + 1);
+    s.ids.push(id);
+    addCard({ id, set: code, num: i + 1, name: pname, club, rc: false, fs: false, rare: !!rare });
+  });
+  SETS.push(s); SET_BY_CODE[code] = s;
+}
+const BASE_IDS = ALL.filter(c => c.set === 'base').map(c => c.id);
+const INSERT_IDS = ALL.filter(c => c.set !== 'base').map(c => c.id);
+const CODES = Object.keys(SET_BY_CODE).sort((a, b) => b.length - a.length);
+
+const SECTIONS = [];
+SECTIONS.push({ key: 'all', group: 'Everything', label: 'Every card · base + inserts', ids: BASE_IDS.concat(INSERT_IDS) });
+SECTIONS.push({ key: 'base', group: 'Base set', label: 'Whole base set · 1–300', ids: BASE_IDS });
+SECTIONS.push({ key: 'fs', group: 'Base set', label: 'Future Stars · 1–20', ids: BASE_IDS.slice(0, 20) });
+for (const code of CLUB_ORDER){
+  const ids = ALL.filter(c => c.set === 'base' && !c.fs && c.club === code).map(c => c.id);
+  SECTIONS.push({ key: 'club:' + code, group: 'Base set', label: `${CLUBS[code][0]} · ${ids[0]}–${ids[ids.length - 1]}`, ids });
+}
+SECTIONS.push({ key: 'ins', group: 'Inserts', label: 'All inserts', ids: INSERT_IDS });
+for (const s of SETS) SECTIONS.push({ key: 'set:' + s.code, group: 'Inserts', label: `${s.name} · ${s.code}1–${s.ids.length}${s.note ? ' · ' + s.note : ''}`, ids: s.ids });
+
+/* ===================== Pure logic ===================== */
+const OFFER_ST = ['open', 'cancelled', 'done', 'declined'];
+function cnt(p, id){
+  const v = p && p.counts ? p.counts[id] : 0;
+  return typeof v === 'number' && v > 0 ? Math.min(99, Math.floor(v)) : 0;
+}
+function inScope(p, c){
+  const sc = p.scope && p.scope.length ? p.scope : ['base'];
+  return c.set === 'base' ? sc.includes('base') : sc.includes(c.set);
+}
+
+/* Parse "12 45 101-105 AK1 8b7x2 rt 3" into [{id, n}] plus unrecognised tokens. */
+function parseEntry(text){
+  let t = String(text || '').toUpperCase()
+    .replace(/[#]/g, ' ')
+    .replace(/[×*]/g, 'X')
+    .replace(/[–—]/g, '-')
+    .replace(/\bAND\b/g, ' ');
+  t = t.replace(/\s*-\s*/g, '-');
+  t = t.replace(/(\d)\s*X\s*(\d)/g, '$1X$2');
+  t = t.replace(/(^|[\s,;])X\s+(\d)/g, '$1X$2');
+  t = t.replace(/\b(8B|[A-Z]{2,3})\s+(\d{1,2})\b/g, (m, a, b) => SET_BY_CODE[a] ? a + b : m);
+  const tokens = t.split(/[\s,;/+]+/).filter(Boolean);
+  const order = [], qty = new Map(), bad = [];
+  let last = [];
+  const add = (id, n) => { if (!qty.has(id)) order.push(id); qty.set(id, (qty.get(id) || 0) + n); };
+  for (const tok of tokens){
+    let m;
+    if ((m = tok.match(/^X(\d{1,2})$/))){
+      const n = parseInt(m[1], 10);
+      if (last.length && n >= 1){ for (const id of last) add(id, n - 1); } else bad.push(tok);
+      continue;
+    }
+    if ((m = tok.match(/^(\d{1,3})-(\d{1,3})(?:X(\d{1,2}))?$/))){
+      let a = parseInt(m[1], 10), b = parseInt(m[2], 10); const n = m[3] ? Math.max(1, parseInt(m[3], 10)) : 1;
+      if (a > b) [a, b] = [b, a];
+      if (a >= 1 && b <= 300){ last = []; for (let i = a; i <= b; i++){ add(String(i), n); last.push(String(i)); } }
+      else { bad.push(tok); last = []; }
+      continue;
+    }
+    if ((m = tok.match(/^(\d{1,3})(?:X(\d{1,2}))?$/))){
+      const num = parseInt(m[1], 10); const n = m[2] ? Math.max(1, parseInt(m[2], 10)) : 1;
+      if (num >= 1 && num <= 300){ add(String(num), n); last = [String(num)]; } else { bad.push(tok); last = []; }
+      continue;
+    }
+    if ((m = tok.match(/^(8B|[A-Z]{2,3})-?(\d{1,2})(?:-(?:8B|[A-Z]{2,3})?(\d{1,2}))?(?:X(\d{1,2}))?$/))){
+      const s = SET_BY_CODE[m[1]];
+      const a0 = parseInt(m[2], 10), b0 = m[3] ? parseInt(m[3], 10) : a0;
+      const a = Math.min(a0, b0), b = Math.max(a0, b0);
+      const n = m[4] ? Math.max(1, parseInt(m[4], 10)) : 1;
+      if (s && a >= 1 && b <= s.ids.length){ last = []; for (let i = a; i <= b; i++){ add(m[1] + i, n); last.push(m[1] + i); } }
+      else { bad.push(tok); last = []; }
+      continue;
+    }
+    bad.push(tok); last = [];
+  }
+  return { items: order.map(id => ({ id, n: Math.min(qty.get(id), 50) })), bad: bad.filter(t => /\d/.test(t)) };
+}
+
+/* Apply items to a counts map. mode: got | swap | remove. Returns {prev} of changed ids. */
+function applyToCounts(counts, items, mode){
+  const prev = {};
+  for (const { id, n } of items){
+    const b = counts[id] || 0;
+    let a = b;
+    if (mode === 'got') a = Math.max(b, n);
+    else if (mode === 'swap') a = Math.max(b, 1) + n;
+    else a = Math.max(0, b - n);
+    a = Math.min(a, 99);
+    if (a !== b){
+      if (!(id in prev)) prev[id] = b;
+      if (a > 0) counts[id] = a; else delete counts[id];
+    }
+  }
+  return prev;
+}
+
+/* What I can get from friend f, and give to f. */
+function computeMatch(me, f){
+  const get = [], give = [];
+  for (const c of ALL){
+    const mine = cnt(me, c.id), theirs = cnt(f, c.id);
+    if (theirs > 1 && mine === 0 && inScope(me, c)) get.push(c);
+    if (f.complete && mine > 1 && theirs === 0 && inScope(f, c)) give.push(c);
+  }
+  return { f, get, give, score: f.complete ? Math.min(get.length, give.length) : 0 };
+}
+function rankMatches(me, friends){
+  return friends.map(f => computeMatch(me, f)).sort((x, y) =>
+    (y.score - x.score) || (y.get.length - x.get.length) || (y.give.length - x.give.length) || x.f.nick.localeCompare(y.f.nick));
+}
+function stats(p){
+  let base = 0, ins = 0, spares = 0;
+  for (const [id, v] of Object.entries(p.counts || {})){
+    const c = BY_ID.get(id); if (!c || !(v > 0)) continue;
+    if (c.set === 'base') base++; else ins++;
+    if (v > 1) spares += v - 1;
+  }
+  return { base, ins, spares };
+}
+
+/* Swap offers. An offer lives in the SENDER's doc: give = cards the sender gives, get = cards the sender gets.
+   The recipient answers in THEIR own doc (replies[offerId]) and updates their own counts in the same write.
+   The sender's app then settles the offer once, applying the swap to the sender's counts.
+   Everyone only ever writes their own doc. */
+function promisedSpares(p){
+  const m = {};
+  for (const o of p.offers || []) if (o.st === 'open') for (const id of o.give) m[id] = (m[id] || 0) + 1;
+  return m;
+}
+function acceptInto(d, o){
+  for (const id of o.give) d.counts[id] = Math.min(99, (d.counts[id] || 0) + 1);
+  for (const id of o.get){ const v = (d.counts[id] || 0) - 1; if (v > 0) d.counts[id] = v; else delete d.counts[id]; }
+}
+function settleOffers(d, lookup){
+  const notes = [];
+  for (const o of d.offers || []){
+    if (o.st !== 'open' && o.st !== 'cancelled') continue;
+    const rec = lookup(o.to);
+    const r = rec && rec.replies ? rec.replies[o.id] : null;
+    if (!r) continue;
+    if (r.s === 'accepted'){
+      for (const id of o.give){ const v = (d.counts[id] || 0) - 1; if (v > 0) d.counts[id] = v; else delete d.counts[id]; }
+      for (const id of o.get) d.counts[id] = Math.min(99, (d.counts[id] || 0) + 1);
+      notes.push({ kind: 'accepted', nick: rec.nick, id: o.id });
+      o.st = 'done';
+    } else if (o.st === 'open'){
+      notes.push({ kind: 'declined', nick: rec.nick, id: o.id });
+      o.st = 'declined';
+    }
+  }
+  return notes;
+}
+function pruneOffers(d){
+  const open = d.offers.filter(o => o.st === 'open');
+  const rest = d.offers.filter(o => o.st !== 'open').sort((a, b) => b.at - a.at).slice(0, 30).reverse();
+  d.offers = rest.concat(open).slice(-60);
+}
+function pruneReplies(d){
+  d.replies = Object.fromEntries(Object.entries(d.replies || {}).sort((a, b) => b[1].at - a[1].at).slice(0, 80));
+}
+
+/* ===================== State ===================== */
+const S = {
+  db: null, user: null, sample: null, imgLimits: null, scanOff: false,
+  uid: null, isOwner: false, myName: '',
+  status: 'starting', loaded: false, slow: false, readOnly: false, saveFailed: false,
+  players: {}, local: {}, dirty: new Set(), saving: new Set(), again: new Set(),
+  activeId: null, demo: false, demoPlayers: [],
+  tab: 'cards', addMode: 'pad', mode: 'swap', section: 'base', filter: 'all', query: '',
+  padSet: 'base', padBuf: '', padLog: [], undo: null, onboardAsked: false, expanded: new Set(), seenIncoming: null,
+  platform: 'none', fb: null, authUser: null, adminUid: null, unsub: null, welcomeOpen: false
+};
+const isWeb = () => S.platform === 'firebase';
+const EMPTY = { counts: {}, scope: ['base'], complete: false, nick: '', adult: '', child: '', full: '' };
+const cleanName = v => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 24) : '');
+function setNames(d, adult, child){
+  d.adult = cleanName(adult) || d.adult || 'Friend';
+  d.child = cleanName(child);
+  d.nick = d.child || d.adult;
+  d.full = d.child ? `${d.child} (${d.adult})` : d.adult;
+  return d;
+}
+const store = {
+  get(k){ try { return localStorage.getItem('ggn.' + k); } catch { return null; } },
+  set(k, v){ try { localStorage.setItem('ggn.' + k, v); } catch {} }
+};
+S.tab = ['cards', 'swaps', 'friends'].includes(store.get('tab')) ? store.get('tab') : 'cards';
+S.mode = ['got', 'swap', 'remove'].includes(store.get('mode')) ? store.get('mode') : 'swap';
+S.addMode = ['pad', 'list', 'photo'].includes(store.get('addMode')) ? store.get('addMode')
+  : (window.matchMedia && matchMedia('(pointer: coarse)').matches ? 'pad' : 'list');
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clampInt = (v, lo, hi) => { v = Math.floor(Number(v)); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo; };
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
+
+function sanitize(raw, id){
+  if (!raw || typeof raw !== 'object') return null;
+  const counts = {};
+  if (raw.counts && typeof raw.counts === 'object'){
+    for (const [k, v] of Object.entries(raw.counts)){
+      if (BY_ID.has(k)){ const n = clampInt(v, 0, 99); if (n > 0) counts[k] = n; }
+    }
+  }
+  let scope = Array.isArray(raw.scope) ? raw.scope.filter(x => x === 'base' || SET_BY_CODE[x]) : ['base'];
+  if (!scope.length) scope = ['base'];
+  return {
+    id,
+    ...setNames({}, cleanName(raw.adult) || cleanName(raw.nick) || 'Friend', raw.child),
+    counts, complete: !!raw.complete, scope,
+    other: typeof raw.other === 'string' ? raw.other.slice(0, 400) : '',
+    managed: !!raw.managed,
+    updatedAt: Number(raw.updatedAt) || 0,
+    offers: cleanOffers(raw.offers),
+    replies: cleanReplies(raw.replies)
+  };
+}
+function cleanIds(a){
+  const out = [];
+  if (Array.isArray(a)) for (const x of a){ const id = String(x); if (BY_ID.has(id) && !out.includes(id)) out.push(id); if (out.length >= 60) break; }
+  return out;
+}
+function cleanOffers(a){
+  if (!Array.isArray(a)) return [];
+  return a.slice(-60).map(o => o && typeof o === 'object' ? {
+    id: String(o.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 24),
+    to: String(o.to || '').slice(0, 80),
+    give: cleanIds(o.give), get: cleanIds(o.get),
+    at: Number(o.at) || 0,
+    st: OFFER_ST.includes(o.st) ? o.st : 'open'
+  } : null).filter(o => o && o.id && o.to && (o.give.length || o.get.length));
+}
+function cleanReplies(r){
+  const out = {};
+  if (r && typeof r === 'object') for (const [k, v] of Object.entries(r)){
+    if (/^[a-z0-9]{1,24}$/i.test(k) && v && (v.s === 'accepted' || v.s === 'declined')) out[k] = { s: v.s, at: Number(v.at) || 0 };
+  }
+  return out;
+}
+function toStore(d){
+  return {
+    v: 1, adult: d.adult, child: d.child || '', nick: d.nick, counts: { ...d.counts }, complete: !!d.complete, scope: [...d.scope], other: d.other || '', managed: !!d.managed, updatedAt: d.updatedAt || 0,
+    offers: (d.offers || []).map(o => ({ id: o.id, to: o.to, give: [...o.give], get: [...o.get], at: o.at, st: o.st })),
+    replies: Object.fromEntries(Object.entries(d.replies || {}).map(([k, v]) => [k, { s: v.s, at: v.at }]))
+  };
+}
+function newDoc(id, adult, child){ return setNames({ id, counts: {}, complete: false, scope: ['base'], other: '', managed: false, updatedAt: 0, offers: [], replies: {} }, adult || 'Friend', child); }
+function getDoc(id){
+  if (!id) return null;
+  if (S.local[id]) return S.local[id];
+  if (S.players[id]) return S.players[id];
+  return S.demoPlayers.find(p => p.id === id) || null;
+}
+function mutable(id){
+  if (!S.local[id]){
+    const base = S.players[id] || newDoc(id);
+    S.local[id] = JSON.parse(JSON.stringify(base));
+  }
+  return S.local[id];
+}
+function allPlayers(){
+  const ids = new Set([...Object.keys(S.players), ...Object.keys(S.local)]);
+  const list = [...ids].map(getDoc).filter(Boolean);
+  if (S.demo) list.push(...S.demoPlayers);
+  return list;
+}
+function friendsOf(id){ return allPlayers().filter(p => p.id !== id && p.id !== 'local'); }
+function activeDoc(){ return getDoc(S.activeId); }
+function canWriteActive(){
+  if (!S.activeId) return false;
+  if (S.activeId === 'local') return true;
+  if (!S.db || S.readOnly) return false;
+  return !!getDoc(S.activeId);
+}
+function managedIds(){ return allPlayers().filter(p => p.managed).map(p => p.id); }
+function incomingFor(pid){
+  const me = getDoc(pid); if (!me) return [];
+  const out = [];
+  for (const p of allPlayers()){
+    if (p.demo || p.id === pid) continue;
+    for (const o of p.offers || []) if (o.to === pid && o.st === 'open' && !(me.replies || {})[o.id]) out.push({ from: p, o });
+  }
+  return out.sort((a, b) => b.o.at - a.o.at);
+}
+function outgoingFor(pid){
+  const me = getDoc(pid); if (!me) return [];
+  const cutoff = Date.now() - 3 * 86400e3;
+  return (me.offers || []).filter(o => o.st === 'open' || o.at > cutoff)
+    .map(o => { const to = getDoc(o.to); return { o, to, reply: to && to.replies ? to.replies[o.id] || null : null }; })
+    .sort((a, b) => b.o.at - a.o.at);
+}
+function openOfferTo(pid, fid){ const me = getDoc(pid); return ((me && me.offers) || []).find(o => o.to === fid && o.st === 'open') || null; }
+function myProfiles(){
+  const ids = [];
+  if (S.uid && getDoc(S.uid) && !S.readOnly) ids.push(S.uid);
+  if (S.isOwner) for (const p of allPlayers()) if (p.managed && !p.demo && !ids.includes(p.id)) ids.push(p.id);
+  return ids;
+}
+
+/* ===================== Saving ===================== */
+const timers = {};
+function scheduleSave(pid){
+  if (!S.db || pid === 'local') return;
+  S.dirty.add(pid);
+  clearTimeout(timers[pid]);
+  timers[pid] = setTimeout(() => flush(pid), 700);
+  renderSaveState();
+}
+async function flush(pid){
+  clearTimeout(timers[pid]);
+  if (!S.dirty.has(pid)) return true;
+  if (S.saving.has(pid)){ S.again.add(pid); return true; }
+  const doc = S.local[pid];
+  if (!doc){ S.dirty.delete(pid); return true; }
+  S.dirty.delete(pid); S.saving.add(pid); renderSaveState();
+  doc.updatedAt = Date.now();
+  const data = toStore(doc);
+  let ok = false;
+  for (let attempt = 0; attempt < 2 && !ok; attempt++){
+    try { await S.db.doc('players/' + pid).set(data); ok = true; }
+    catch (e){
+      const code = e && e.code;
+      if (code === 'unavailable' && attempt === 0){ await sleep(700 + Math.random() * 800); continue; }
+      onWriteError(code, pid);
+      break;
+    }
+  }
+  S.saving.delete(pid);
+  if (ok) S.saveFailed = false;
+  if (S.again.has(pid)){ S.again.delete(pid); S.dirty.add(pid); return flush(pid); }
+  renderSaveState(); renderNotice();
+  return ok;
+}
+function onWriteError(code, pid){
+  if (code === 'invalid_argument' || code === 'revoked' || code === 'not_granted'){
+    if (pid === S.uid) S.readOnly = true;
+    else toast("Couldn't save that friend's cards");
+  } else if (code === 'quota_exceeded'){
+    toast('The swap list is full, so this change was not saved');
+  } else {
+    S.saveFailed = true; S.dirty.add(pid);
+  }
+}
+function flushAll(){ for (const pid of [...S.dirty]) flush(pid); }
+let settleTimer = null;
+function scheduleSettle(){ clearTimeout(settleTimer); settleTimer = setTimeout(runSettle, 600 + Math.random() * 1200); }
+function runSettle(){
+  if (!S.db || !S.loaded || document.visibilityState === 'hidden') return;
+  const notes = [];
+  for (const pid of myProfiles()){
+    const server = S.players[pid]; if (!server) continue;
+    const pending = (server.offers || []).some(o => {
+      if (o.st !== 'open' && o.st !== 'cancelled') return false;
+      const rec = getDoc(o.to); const r = rec && rec.replies ? rec.replies[o.id] : null;
+      return !!r && (o.st === 'open' || r.s === 'accepted');
+    });
+    if (!pending) continue;
+    if (S.dirty.has(pid) || S.saving.has(pid)){ scheduleSettle(); continue; }
+    const d = mutable(pid);
+    const ns = settleOffers(d, getDoc);
+    if (ns.length){ S.dirty.add(pid); flush(pid); for (const n of ns) notes.push({ ...n, pid }); }
+  }
+  if (!notes.length) return;
+  renderAll();
+  if (notes.length > 1) toast(`${notes.length} swap offers answered. Cards updated.`);
+  else {
+    const n = notes[0];
+    const whose = n.pid === S.uid ? 'your' : `${getDoc(n.pid).nick}'s`;
+    toast(n.kind === 'accepted' ? `${n.nick} accepted ${whose} swap offer. Cards updated.` : `${n.nick} declined ${whose} swap offer.`);
+  }
+}
+function noticeIncoming(){
+  const ids = new Set();
+  for (const pid of myProfiles()) for (const x of incomingFor(pid)) ids.add(x.o.id);
+  if (S.seenIncoming){
+    const fresh = [...ids].filter(id => !S.seenIncoming.has(id)).length;
+    if (fresh) toast(fresh === 1 ? 'New swap offer. Check the Swaps tab.' : `${fresh} new swap offers. Check the Swaps tab.`);
+  }
+  S.seenIncoming = ids;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSettle(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAll(); });
+
+/* ===================== Mutations ===================== */
+function applyItems(items, mode, pid = S.activeId, quiet){
+  if (!canWriteActive() && pid === S.activeId){ needJoin(); return 0; }
+  const doc = mutable(pid);
+  const prev = applyToCounts(doc.counts, items, mode);
+  const changed = Object.keys(prev).length;
+  if (!changed){ if (!quiet) toast('No change: those cards were already marked'); return 0; }
+  S.undo = { pid, prev };
+  scheduleSave(pid);
+  return changed;
+}
+function tapCard(id){
+  if (!canWriteActive()){ needJoin(); return; }
+  const doc = mutable(S.activeId);
+  const b = doc.counts[id] || 0;
+  let a = b;
+  if (S.mode === 'got'){
+    if (b === 0) a = 1; else if (b === 1) a = 0;
+    else { toast(`#${id} has swaps. Use Remove to take them off.`); return; }
+  } else if (S.mode === 'swap') a = Math.min(99, Math.max(b, 1) + 1);
+  else a = Math.max(0, b - 1);
+  if (a === b){ toast(`#${id} is already a need`); return; }
+  if (a > 0) doc.counts[id] = a; else delete doc.counts[id];
+  S.undo = { pid: S.activeId, prev: { [id]: b } };
+  scheduleSave(S.activeId);
+  updateTile(id, true); renderSummary(); renderBadges();
+  const c = BY_ID.get(id);
+  toast(`${id} ${c.short}: ${a === 0 ? 'need' : a === 1 ? 'got' : plural(a - 1, 'swap')}`, true);
+}
+function undo(){
+  const u = S.undo; if (!u) return;
+  const doc = mutable(u.pid);
+  for (const [id, v] of Object.entries(u.prev)){ if (v > 0) doc.counts[id] = v; else delete doc.counts[id]; }
+  S.undo = null;
+  scheduleSave(u.pid);
+  hideToast(); renderAll();
+}
+function needJoin(){
+  if (isWeb() && !S.uid){ openWelcome(); return; }
+  if (S.readOnly){ toast("You can look but can't add cards yet"); return; }
+  if (!S.db || !S.uid){ toast('Sign in to Claude to save your cards'); return; }
+  openJoin();
+}
+
+/* ===================== Rendering ===================== */
+function cardChip(c, cls, extra){
+  return `<span class="chip ${cls || ''}" title="${esc(c.name + ' · ' + CLUBS[c.club][0])}"><b>${c.id}</b>${esc(c.short)}${c.rare ? ' ★' : ''}${extra || ''}</span>`;
+}
+function tileHTML(c, doc){
+  const n = cnt(doc, c.id);
+  const cls = n === 0 ? '' : n === 1 ? ' got' : ' swap';
+  const state = n === 0 ? 'need' : n === 1 ? 'got' : `got, ${plural(n - 1, 'swap')}`;
+  return `<button type="button" class="tile${cls}" data-id="${c.id}" aria-label="${esc(`${c.id} ${c.name}, ${CLUBS[c.club][0]}: ${state}`)}"><span class="n${c.id.length > 3 ? ' long' : ''}">${c.id}</span><span class="p">${esc(c.short)}</span>${n > 1 ? `<span class="b">+${n - 1}</span>` : ''}${c.rare ? '<span class="star" aria-hidden="true">★</span>' : ''}</button>`;
+}
+function avatar(p){
+  let h = 0; for (const ch of String(p.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const hues = ['#1E4FD8', '#B4442C', '#17784C', '#7A3FB8', '#B27A00', '#0F7C8C', '#A33A6B', '#4A5A7A'];
+  return `<span class="av" style="background:${hues[h % hues.length]}" aria-hidden="true">${esc((p.nick || '?').charAt(0).toUpperCase())}</span>`;
+}
+function ago(ts){
+  if (!ts) return 'not updated yet';
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 90) return 'updated just now';
+  if (s < 3600) return `updated ${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `updated ${Math.round(s / 3600)} h ago`;
+  return `updated ${Math.round(s / 86400)} d ago`;
+}
+
+function renderWho(){
+  const d = activeDoc();
+  let label = isWeb() ? 'Sign in' : 'Not signed in';
+  if (isWeb() && S.status === 'auth') label = 'Loading…';
+  else if (isWeb() && (!S.uid || S.status === 'noconfig')) label = S.status === 'noconfig' ? 'Not set up' : 'Sign in';
+  else if (S.status === 'starting' || (S.db && !S.loaded && !d)) label = 'Loading…';
+  else if (S.activeId === 'local') label = 'Not saved';
+  else if (d) label = (S.activeId !== S.uid ? 'Editing ' : '') + d.nick;
+  else if (S.db && S.uid) label = S.readOnly ? 'View only' : 'Join';
+  $('#whoName').textContent = label;
+}
+function renderNotice(){
+  const el = $('#notice');
+  let html = '', bad = false;
+  if (S.status === 'noconfig'){
+    html = "This copy isn't connected to its database yet. Paste your Firebase settings into <b>config.js</b> (see SETUP.md) and deploy again."; bad = true;
+  } else if (isWeb() && S.status === 'signedout'){
+    html = 'Sign in to add your cards and see your friends\' swaps. <button type="button" class="btn small primary" id="noticeJoin">Join</button>';
+  } else if (isWeb() && S.readOnly){
+    html = "Your cards couldn't be saved because the database said no. If you set this app up, check the Firestore rules were deployed (see SETUP.md)."; bad = true;
+  } else if (S.status === 'nodb'){
+    html = "You're not signed in to Claude here, so nothing is saved and you can't see your friends. Open your invite link and sign in to join the swap group.";
+  } else if (S.status === 'error'){
+    html = 'The swap list stopped updating. Reload the page to reconnect.'; bad = true;
+  } else if (S.db && !S.uid){
+    html = 'Sign in to Claude to add your cards. You can still look around.';
+  } else if (S.readOnly){
+    html = "You can see everyone's cards but can't add yours. Ask whoever shared this page to invite you by email with <b>Can edit</b> access, then open the invite link."; bad = true;
+  } else if (S.slow && !S.loaded){
+    html = "Can't reach the swap list yet. Check your connection; it updates by itself."; bad = true;
+  } else if (S.saveFailed){
+    html = 'Your last change has not saved yet. <button type="button" class="btn small" id="retrySave">Try again</button>'; bad = true;
+  }
+  el.hidden = !html;
+  el.className = 'notice' + (bad ? ' bad' : '');
+  el.innerHTML = html;
+}
+function renderSaveState(){
+  const el = $('#saveState'); if (!el) return;
+  const pid = S.activeId;
+  if (!S.db || pid === 'local'){ el.textContent = pid === 'local' ? 'Not saved' : ''; el.className = 'save' + (pid === 'local' ? ' bad' : ''); return; }
+  if (S.saveFailed){ el.textContent = 'Not saved'; el.className = 'save bad'; return; }
+  if (S.dirty.has(pid) || S.saving.has(pid)){ el.textContent = 'Saving…'; el.className = 'save'; return; }
+  el.textContent = getDoc(pid) ? 'Saved' : ''; el.className = 'save';
+}
+function renderSummary(){
+  const el = $('#summary');
+  const d = activeDoc();
+  if (!d){
+    let body;
+    if (isWeb() && !S.uid && S.status !== 'noconfig') body = '<p>Sign in to start adding your cards and see who to swap with.</p><div class="sheet-actions"><button type="button" class="btn primary" id="joinBtnWeb">Join the swap group</button></div>';
+    else if (S.status === 'starting' || S.status === 'auth' || (S.db && !S.loaded)) body = '<p class="muted">Loading the swap list…</p>';
+    else if (S.db && S.uid && !S.readOnly) body = '<p>Join the swap group to start adding your cards.</p><div class="sheet-actions"><button type="button" class="btn primary" id="joinBtn">Join with my name</button></div>';
+    else body = '<p class="muted">Browse the full 2026/27 checklist below.</p>';
+    el.innerHTML = `<h2>Your collection</h2>${body}`;
+    return;
+  }
+  const st = stats(d);
+  const editingOther = S.activeId !== S.uid && S.activeId !== 'local';
+  el.innerHTML = `
+    <div class="row between"><h2>${esc(d.full)}${editingOther ? ' <span class="pill gold">you manage this list</span>' : ''}</h2><span class="save" id="saveState"></span></div>
+    <div class="stats">
+      <div class="stat"><div class="k">Base set</div><div class="v">${st.base}<small>/300</small></div><div class="bar"><i style="width:${(st.base / 3).toFixed(1)}%"></i></div></div>
+      <div class="stat"><div class="k">Inserts</div><div class="v">${st.ins}<small>/${INSERT_IDS.length}</small></div></div>
+      <button type="button" class="stat statbtn" id="showSwaps" aria-label="Show my ${st.spares} swaps"><div class="k">Swaps</div><div class="v">${st.spares}</div></button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="completeToggle" ${d.complete ? 'checked' : ''} ${canWriteActive() ? '' : 'disabled'}>
+      <span><b>Show friends what I need</b><br><small class="muted">Switch on once you've ticked off every card you've got, so swap suggestions are right.</small></span></label>
+    <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button></div>`;
+  renderSaveState();
+}
+function sectionOptions(){
+  let html = '', group = '';
+  for (const s of SECTIONS){
+    if (s.group !== group){ if (group) html += '</optgroup>'; html += `<optgroup label="${esc(s.group)}">`; group = s.group; }
+    html += `<option value="${esc(s.key)}">${esc(s.label)}</option>`;
+  }
+  return html + '</optgroup>';
+}
+function visibleCards(){
+  const q = fold(S.query.trim());
+  let list;
+  if (q){
+    const qq = q.replace(/\s+/g, '').toUpperCase();
+    if (/^\d+$/.test(qq)) list = ALL.filter(c => c.set === 'base' && c.id.startsWith(qq));
+    else if (BY_ID.has(qq)) list = [BY_ID.get(qq)];
+    else list = ALL.filter(c => c.key.includes(q));
+  } else {
+    const sec = SECTIONS.find(s => s.key === S.section) || SECTIONS[0];
+    list = sec.ids.map(id => BY_ID.get(id));
+  }
+  const d = activeDoc() || EMPTY;
+  if (S.filter === 'need') list = list.filter(c => cnt(d, c.id) === 0);
+  else if (S.filter === 'got') list = list.filter(c => cnt(d, c.id) >= 1);
+  else if (S.filter === 'swap') list = list.filter(c => cnt(d, c.id) > 1);
+  return list;
+}
+function renderGrid(){
+  const d = activeDoc() || EMPTY;
+  const list = visibleCards();
+  const verb = S.mode === 'got' ? 'Tap a card to tick it off as got' : S.mode === 'swap' ? 'Tap a card to add a swap' : 'Tap a card to take one copy off';
+  const needs = list.filter(c => cnt(d, c.id) === 0);
+  let hint = `<span>${plural(list.length, 'card')} · ${verb}. Hold a card to change its count.</span>`;
+  if (S.mode === 'got' && needs.length > 1 && canWriteActive()) hint += `<button type="button" class="linkbtn" id="tickAll">Tick all ${needs.length} shown as got</button>`;
+  $('#gridHint').innerHTML = hint;
+  $('#grid').innerHTML = list.length ? list.map(c => tileHTML(c, d)).join('') : '<p class="muted">No cards match.</p>';
+}
+function updateTile(id, focus){
+  const el = $(`#grid .tile[data-id="${CSS.escape(id)}"]`);
+  if (!el) return;
+  const c = BY_ID.get(id);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = tileHTML(c, activeDoc() || EMPTY);
+  const nu = tmp.firstElementChild;
+  nu.classList.add('pop');
+  el.replaceWith(nu);
+  if (focus) nu.focus({ preventScroll: true });
+}
+function renderModes(){
+  document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode)));
+  const go = $('#padGo');
+  go.classList.toggle('swap', S.mode === 'swap');
+  go.classList.toggle('remove', S.mode === 'remove');
+  go.textContent = S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove';
+  $('#entryBtn').textContent = S.mode === 'got' ? 'Add as got' : S.mode === 'swap' ? 'Add swaps' : 'Remove';
+}
+function renderAddMode(){
+  document.querySelectorAll('[data-am]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.am === S.addMode)));
+  $('#pane-pad').hidden = S.addMode !== 'pad';
+  $('#pane-list').hidden = S.addMode !== 'list';
+  $('#pane-photo').hidden = S.addMode !== 'photo';
+  $('.modes').hidden = S.addMode === 'photo';
+  if (S.addMode === 'photo') renderPhotoPane();
+}
+function padCard(){
+  if (!S.padBuf) return null;
+  const id = S.padSet === 'base' ? String(parseInt(S.padBuf, 10)) : S.padSet + parseInt(S.padBuf, 10);
+  return BY_ID.get(id) || null;
+}
+function renderPad(){
+  const c = padCard();
+  const ro = $('#readout');
+  $('#padNum').textContent = S.padBuf ? (S.padSet === 'base' ? '' : S.padSet) + S.padBuf : '–';
+  ro.classList.toggle('ok', !!c);
+  ro.classList.toggle('no', !!S.padBuf && !c);
+  if (c){
+    const n = cnt(activeDoc() || EMPTY, c.id);
+    $('#padName').textContent = `${c.name} · ${CLUBS[c.club][1]}${n ? ` · you have ${n}` : ''}`;
+  } else if (S.padBuf){
+    $('#padName').textContent = 'No card with that number';
+  } else {
+    const s = S.padSet === 'base' ? '1–300' : `${S.padSet}1–${SET_BY_CODE[S.padSet].ids.length}`;
+    $('#padName').textContent = `Number ${s}`;
+  }
+  $('#padGo').disabled = !c;
+}
+function padPress(k){
+  if (k === 'back'){ S.padBuf = S.padBuf.slice(0, -1); renderPad(); return; }
+  if (k === 'go'){
+    const c = padCard(); if (!c) return;
+    const changed = applyItems([{ id: c.id, n: 1 }], S.mode);
+    if (changed){
+      const n = cnt(activeDoc(), c.id);
+      S.padLog.unshift(`${c.id} ${c.short}${n > 1 ? ` (+${n - 1})` : n === 0 ? ' (need)' : ''}`);
+      S.padLog = S.padLog.slice(0, 8);
+      renderPadLog(true);
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch {}
+      updateTile(c.id, false); renderSummary(); renderBadges();
+    }
+    S.padBuf = ''; renderPad();
+    return;
+  }
+  const max = S.padSet === 'base' ? 3 : 2;
+  if (S.padBuf.length >= max) S.padBuf = '';
+  if (S.padBuf === '' && k === '0') return;
+  S.padBuf += k; renderPad();
+}
+function renderPadLog(canUndo){
+  $('#padLog').innerHTML = S.padLog.length
+    ? 'Just done: ' + esc(S.padLog.join(', ')) + (canUndo && S.undo ? ' · <button type="button" class="linkbtn" id="padUndo">Undo last</button>' : '')
+    : 'Flip through your pile and punch in each number. Same number twice = two copies.';
+}
+function renderPreview(){
+  const val = $('#entry').value;
+  const { items, bad } = parseEntry(val);
+  $('#entryBtn').disabled = !items.length;
+  if (!val.trim()){ $('#preview').innerHTML = ''; return; }
+  const shown = items.slice(0, 40).map(({ id, n }) => cardChip(BY_ID.get(id), S.mode === 'swap' ? 'give' : 'get', n > 1 ? ` ×${n}` : '')).join('');
+  const more = items.length > 40 ? `<span class="chip">+${items.length - 40} more</span>` : '';
+  const badHtml = bad.length ? `<p class="flag">Not recognised: ${esc(bad.slice(0, 12).join(', '))}${bad.length > 12 ? '…' : ''}</p>` : '';
+  $('#preview').innerHTML = `${items.length ? `<small class="muted">${plural(items.length, 'card')} ready</small><div class="chips">${shown}${more}</div>` : ''}${badHtml}`;
+}
+function renderPhotoPane(){
+  const el = $('#photoBody');
+  const direct = !!(S.sample && S.imgLimits && !S.scanOff);
+  const key = direct ? 'direct' : 'ai';
+  if (el.dataset.k === key) return;
+  el.dataset.k = key;
+  const keep = $('#aiReply') ? $('#aiReply').value : '';
+  let html = '';
+  if (direct){
+    html += `<p>Lay your cards out and take one photo. Backs up is best, because the numbers are printed there. Claude reads the cards and you check the list before anything is added.</p>
+      <div class="sheet-actions"><button type="button" class="btn primary" id="scanBtn">Take or choose a photo</button></div>
+      <p class="help">Uses your own Claude account. Works best with up to about 20 cards in good light.</p>
+      <h4 style="margin-top:18px">Or use another AI app</h4>`;
+  } else {
+    html += `<p>Use ChatGPT or Claude on your phone to read a photo of your cards. Backs up is best, because the numbers are printed there.</p>`;
+  }
+  html += `<ol class="aisteps">
+      <li><button type="button" class="btn small primary" id="aiCopy">Copy the AI instructions</button></li>
+      <li>Open your AI app and start a new chat. Add your photo, paste the instructions and send.
+        <div class="row wrap" style="margin-top:8px"><a class="btn small" href="https://chatgpt.com/" target="_blank" rel="noopener">Open ChatGPT</a><a class="btn small" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude</a></div></li>
+      <li>Copy the AI's reply and paste it here.</li>
+    </ol>
+    <label class="sr" for="aiReply">The AI's reply</label>
+    <textarea id="aiReply" rows="3" placeholder="GGN: 12 32x2 45 AK1" spellcheck="false"></textarea>
+    <div id="aiPreview" class="preview" aria-live="polite"></div>
+    <div class="sheet-actions"><button type="button" class="btn gold" data-aiadd="swap" disabled>Add as swaps</button><button type="button" class="btn primary" data-aiadd="got" disabled>Add as got</button></div>
+    <p class="help">Works with free or paid ChatGPT and Claude. Check the list before you add it, because AI can misread cards.</p>`;
+  el.innerHTML = html;
+  if (keep){ $('#aiReply').value = keep; renderAiPreview(); }
+}
+function aiSource(text){ const m = String(text || '').match(/GGN:\s*([^\n\r]*)/i); return m ? m[1] : String(text || ''); }
+function renderAiPreview(){
+  const box = $('#aiReply'); if (!box) return;
+  const { items, bad } = parseEntry(aiSource(box.value));
+  document.querySelectorAll('[data-aiadd]').forEach(b => { b.disabled = !items.length; });
+  if (!box.value.trim()){ $('#aiPreview').innerHTML = ''; return; }
+  const total = items.reduce((a, b) => a + b.n, 0);
+  $('#aiPreview').innerHTML = (items.length ? `<small class="muted">${plural(total, 'card')} found</small><div class="chips">${items.slice(0, 60).map(({ id, n }) => cardChip(BY_ID.get(id), 'get', n > 1 ? ` ×${n}` : '')).join('')}${items.length > 60 ? `<span class="chip">+${items.length - 60} more</span>` : ''}</div>` : '<p class="flag">No card numbers found. Paste the line that starts with GGN:</p>')
+    + (bad.length ? `<p class="flag">Not recognised: ${esc(bad.slice(0, 12).join(', '))}</p>` : '');
+}
+function aiPrompt(){
+  const line = c => `${c.id} ${c.name} ${c.club}`;
+  const base = ALL.filter(c => c.set === 'base').map(line).join('; ');
+  const ins = SETS.map(s => `${s.name} (${s.code}): ${s.ids.map(id => line(BY_ID.get(id))).join('; ')}`).join('\n');
+  return `I've attached a photo of Topps Flagship Premier League 2026/27 football trading cards. Please identify every card in the photo.
+
+Card backs show the card number: 1 to 300 for the base set, or an insert code like AK1, 8B7 or RTN3. Card fronts show the player and club; insert cards have their own design and the insert set's name.
+
+Use this checklist to find each card's number or code. Club codes: ${CLUB_ORDER.map(k => k + '=' + CLUBS[k][1]).join(', ')}.
+
+BASE SET: ${base}
+
+INSERTS:
+${ins}
+
+Rules:
+- If you can read the number or code on the card, use it.
+- If you can only see the front, match the player and club. If you can't tell whether it's a base card or an insert, use the base number.
+- If the same card appears more than once, write it like 32x2.
+- Leave out anything you can't identify. Don't guess.
+
+Reply with ONE line only. Start it with GGN: and then list the numbers and codes separated by spaces, for example:
+GGN: 12 32x2 45 AK1 8B7`;
+}
+function renderBadges(){
+  const me = activeDoc();
+  const friends = me ? friendsOf(S.activeId) : allPlayers().filter(p => p.id !== S.uid);
+  const live = me ? rankMatches(me, friends).filter(m => m.score > 0).length : 0;
+  const inc = me ? incomingFor(S.activeId).length : 0;
+  const badge = $('#swapsCount');
+  badge.textContent = inc ? String(inc) : live ? String(live) : '';
+  badge.classList.toggle('alert', inc > 0);
+  badge.title = inc ? `${plural(inc, 'swap offer')} waiting` : live ? `${plural(live, 'friend')} to swap with` : '';
+  $('#friendsCount').textContent = friends.filter(p => !p.demo).length ? String(friends.filter(p => !p.demo).length) : '';
+}
+function renderTabs(){
+  for (const t of ['cards', 'swaps', 'friends']){
+    $('#tab-' + t).setAttribute('aria-selected', String(S.tab === t));
+    $('#view-' + t).hidden = S.tab !== t;
+  }
+}
+function chipList(cards, cls, key, limit = 18){
+  if (!cards.length) return '<small class="muted">None</small>';
+  const open = S.expanded.has(key);
+  const shown = open ? cards : cards.slice(0, limit);
+  let html = `<div class="chips">${shown.map(c => cardChip(c, cls)).join('')}</div>`;
+  if (cards.length > limit) html += `<p class="help"><button type="button" class="linkbtn" data-expand="${esc(key)}">${open ? 'Show fewer' : `Show all ${cards.length}`}</button></p>`;
+  return html;
+}
+function renderSwaps(){
+  const el = $('#view-swaps');
+  const me = activeDoc();
+  if (!me){
+    const canJoin = (S.db && S.uid && !S.readOnly) || (isWeb() && !S.uid && S.status !== 'noconfig');
+    el.innerHTML = `<div class="panel empty"><h2>Swap suggestions</h2><p>${canJoin ? 'Join the swap group and add your cards to see who to swap with.' : 'Sign in from your invite link to see swap suggestions.'}</p>${canJoin ? '<div class="sheet-actions"><button type="button" class="btn primary" id="joinBtn2">Join the swap group</button></div>' : ''}</div>`;
+    return;
+  }
+  const friends = friendsOf(S.activeId);
+  if (!friends.length){
+    el.innerHTML = `<div class="panel empty"><h2>No friends here yet</h2>
+      <ol class="steps"><li>Everyone adds their swaps, and ticks off the cards they've got.</li><li>Each person switches on <b>Show friends what I need</b>.</li><li>This tab then lists who to swap with, and which cards.</li><li>Send a swap offer. When your friend accepts, both lists update.</li></ol>
+      <div class="sheet-actions"><button type="button" class="btn gold" id="demoOn">Preview with 2 demo friends</button></div>
+      <p class="help">Demo friends are only on your screen and are never saved.</p></div>`;
+    return;
+  }
+  const matches = rankMatches(me, friends);
+  let html = '';
+  const inc = incomingFor(S.activeId);
+  if (inc.length) html += incomingHTML(me, inc);
+  const outg = outgoingFor(S.activeId);
+  if (outg.length) html += outgoingHTML(outg);
+  if (S.demo) html += `<div class="notice">Showing demo friends. <button type="button" class="btn small" id="demoOff">Hide demo friends</button></div>`;
+  if (!me.complete) html += `<div class="notice">Your needs are hidden from friends until you switch on <b>Show friends what I need</b> on My cards. Until then, some of these may be cards you already have.</div>`;
+  const active = matches.filter(m => m.get.length || m.give.length);
+  const idle = matches.filter(m => !m.get.length && !m.give.length);
+  for (const m of active){
+    const f = m.f;
+    const st = stats(f);
+    const giveBlock = f.complete
+      ? `<h4>You give · ${m.give.length}</h4>${chipList(m.give, 'give', 'give:' + f.id)}`
+      : `<h4>You give</h4><small class="muted">${esc(f.nick)} hasn't switched on their needs yet, so we can't tell what they're after.</small>`;
+    html += `<article class="panel partner">
+      <header><div><h3>${esc(f.full)} ${f.demo ? '<span class="pill">Demo</span>' : ''}${f.managed ? '<span class="pill">managed</span>' : ''}</h3>
+        <p class="meta">Base ${st.base}/300 · ${plural(st.spares, 'swap')} · ${f.demo ? 'demo' : ago(f.updatedAt)}</p></div>
+        <div class="score${m.score ? '' : ' zero'}"><b>${m.score}</b><span>${m.score === 1 ? 'swap' : 'swaps'}</span></div></header>
+      <div class="cols"><div><h4>You get · ${m.get.length}</h4>${chipList(m.get, 'get', 'get:' + f.id)}</div><div>${giveBlock}</div></div>
+      <div class="actions">${partnerActions(f, m)}</div>
+    </article>`;
+  }
+  if (idle.length) html += `<p class="help">Nothing to swap right now with ${esc(idle.map(m => m.f.nick).join(', '))}.</p>`;
+  const myNeeds = ALL.filter(c => cnt(me, c.id) === 0 && inScope(me, c));
+  const rows = [];
+  for (const c of myNeeds){
+    const holders = friends.filter(f => cnt(f, c.id) > 1);
+    if (holders.length) rows.push(`<div class="needrow"><b>${c.id}</b><div><span>${esc(c.name)}</span> <small class="muted">${esc(CLUBS[c.club][1])}${c.rare ? ' ★' : ''}</small><br><small>${holders.map(f => `${esc(f.nick)}${cnt(f, c.id) > 2 ? ` (${cnt(f, c.id) - 1})` : ''}`).join(', ')}</small></div></div>`);
+  }
+  const open = S.expanded.has('needs');
+  html += `<div class="panel"><h2>Cards you need that friends can swap</h2>
+    <p class="help">${rows.length ? plural(rows.length, 'card') + ' · who has a spare' : 'None of your needs are on anyone\'s swaps list yet.'}</p>
+    ${(open ? rows : rows.slice(0, 25)).join('')}
+    ${rows.length > 25 ? `<p class="help"><button type="button" class="linkbtn" data-expand="needs">${open ? 'Show fewer' : `Show all ${rows.length}`}</button></p>` : ''}</div>`;
+  el.innerHTML = html;
+}
+function idChips(ids, cls){ return ids.length ? `<div class="chips">${ids.map(id => cardChip(BY_ID.get(id), cls)).join('')}</div>` : '<small class="muted">Nothing</small>'; }
+function partnerActions(f, m){
+  if (f.demo) return `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy swap message</button><small class="muted" style="align-self:center">Demo friend, so offers are off</small>`;
+  const pending = openOfferTo(S.activeId, f.id);
+  const theirs = incomingFor(S.activeId).some(x => x.from.id === f.id);
+  const any = m.get.length || m.give.length;
+  let html = '';
+  if (theirs && !pending) html += `<span class="pill gold" style="align-self:center">They've sent you an offer, see above</span>`;
+  else if (pending) html += `<span class="pill gold" style="align-self:center">Offer sent · waiting</span><button type="button" class="linkbtn" data-cancel="${esc(pending.id)}">Cancel offer</button>`;
+  else if (any) html += `<button type="button" class="btn small gold" data-offer="${esc(f.id)}">Send swap offer</button>`;
+  html += `<button type="button" class="btn small" data-copy="${esc(f.id)}">Copy message</button>`;
+  if (any) html += `<button type="button" class="linkbtn" data-done="${esc(f.id)}">Swapped in person? Update my cards</button>`;
+  return html;
+}
+function offerWarnings(me, o){
+  const w = [];
+  for (const id of o.get){ const n = cnt(me, id); if (n === 0) w.push(`you don't have ${id}`); else if (n === 1) w.push(`${id} is your only copy`); }
+  for (const id of o.give) if (cnt(me, id) > 0) w.push(`you already have ${id}`);
+  return w;
+}
+function incomingHTML(me, inc){
+  return `<div class="panel inbox"><h2>Offers for you · ${inc.length}</h2>${inc.map(({ from, o }) => {
+    const w = offerWarnings(me, o);
+    return `<div class="offer"><p style="margin:0"><b>${esc(from.full)}</b> wants to swap <small class="muted">· ${esc(ago(o.at).replace('updated ', ''))}</small></p>
+      <h4>You get · ${o.give.length}</h4>${idChips(o.give, 'get')}
+      <h4>You give · ${o.get.length}</h4>${idChips(o.get, 'give')}
+      ${w.length ? `<p class="flag">Check first: ${esc(w.join('; '))}</p>` : ''}
+      <div class="actions"><button type="button" class="btn small gold" data-accept="${esc(from.id)}" data-oid="${esc(o.id)}">Accept and update my cards</button><button type="button" class="btn small" data-decline="${esc(from.id)}" data-oid="${esc(o.id)}">Decline</button></div></div>`;
+  }).join('')}</div>`;
+}
+function outgoingHTML(outg){
+  return `<div class="panel"><h2>Your offers</h2>${outg.map(({ o, to, reply }) => {
+    const name = to ? to.full : 'Someone who left';
+    const state = o.st === 'open' ? (reply ? (reply.s === 'accepted' ? 'Accepted, updating your cards' : 'Declined') : `Waiting for ${name}`)
+      : o.st === 'done' ? 'Accepted · cards updated' : o.st === 'declined' ? 'Declined' : 'Cancelled';
+    return `<div class="orow"><div><b>${esc(name)}</b> · ${esc(state)}<br><small class="muted">You get ${esc(o.get.join(', ') || 'nothing')} · you give ${esc(o.give.join(', ') || 'nothing')}</small></div>${o.st === 'open' && !reply ? `<button type="button" class="linkbtn" data-cancel="${esc(o.id)}">Cancel</button>` : ''}</div>`;
+  }).join('')}</div>`;
+}
+function renderFriends(){
+  const el = $('#view-friends');
+  const players = allPlayers().slice().sort((a, b) => (a.id === S.uid ? -1 : b.id === S.uid ? 1 : 0) || (b.updatedAt - a.updatedAt));
+  let html = '';
+  if (S.isOwner && isWeb()){
+    const link = location.origin + location.pathname;
+    html += `<div class="panel"><h2>Invite friends</h2>
+      <p>Send this link in your WhatsApp group:</p><span class="linkbox">${esc(link)}</span>
+      <div class="sheet-actions"><button type="button" class="btn small primary" id="copyInvite">Copy link</button><button type="button" class="btn small" id="addManaged">Keep a list for someone</button></div>
+      <p class="help">Friends tap the link, choose <b>Continue with Google</b> (their list follows them to any phone) or <b>Just use this phone</b>, then add their names and cards.</p></div>`;
+  } else if (S.isOwner){
+    html += `<div class="panel"><h2>Invite friends</h2>
+      <ol class="steps"><li>Open this page's <b>Share</b> menu and invite each friend by email.</li><li>Give them <b>Can edit</b> access, otherwise they can look but not add cards.</li><li>They sign in to Claude with that email (a free account is fine) and open the invite.</li></ol>
+      <p class="help">Keep "Anyone with the link" switched off. People who only have the link can't add cards.</p>
+      <div class="sheet-actions"><button type="button" class="btn small" id="addManaged">Add a friend who isn't on Claude</button></div></div>`;
+  }
+  if (!players.length){
+    html += `<div class="panel"><h2>The swap group</h2><p class="muted">Nobody has joined yet.</p></div>`;
+    el.innerHTML = html; return;
+  }
+  const me = activeDoc();
+  html += `<div class="panel"><h2>The swap group · ${players.filter(p => !p.demo).length}</h2>`;
+  for (const p of players){
+    const st = stats(p);
+    const m = me && p.id !== S.activeId ? computeMatch(me, p) : null;
+    const tag = p.id === S.uid ? 'You' : p.demo ? 'Demo' : p.managed ? 'Managed by owner' : '';
+    html += `<button type="button" class="frow" data-friend="${esc(p.id)}">${avatar(p)}
+      <span class="t"><b>${esc(p.full)}${tag ? ` <span class="pill">${tag}</span>` : ''}</b>
+      <small>Base ${st.base}/300 · ${plural(st.spares, 'swap')} · ${p.complete ? 'needs shown' : 'needs hidden'} · ${p.demo ? 'demo' : ago(p.updatedAt)}</small></span>
+      ${m ? `<span class="s">${m.score}<small>swaps</small></span>` : ''}</button>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+function renderAll(){
+  renderWho(); renderNotice(); renderTabs(); renderSummary(); renderModes(); renderAddMode(); renderPad(); renderPreview(); renderGrid(); renderBadges();
+  if (S.tab === 'swaps') renderSwaps();
+  if (S.tab === 'friends') renderFriends();
+}
+
+/* ===================== Sheet + toast ===================== */
+let lastFocus = null;
+function openSheet(html, onMount){
+  S.sheetAt = Date.now();
+  lastFocus = document.activeElement;
+  $('#sheetBody').innerHTML = html;
+  $('#sheet').hidden = false;
+  if (onMount) onMount($('#sheetBody'));
+  const f = $('#sheetBody').querySelector('input,textarea,button:not([data-close])');
+  if (f) f.focus(); else $('.closex').focus();
+}
+function closeSheet(){
+  $('#sheet').hidden = true; $('#sheetBody').innerHTML = '';
+  S.welcomeOpen = false; S.editing = null;
+  if (lastFocus && lastFocus.focus) try { lastFocus.focus({ preventScroll: true }); } catch {}
+}
+$('#sheet').addEventListener('click', e => {
+  const c = e.target.closest('[data-close]'); if (!c) return;
+  if (c.classList.contains('scrim') && Date.now() - (S.sheetAt || 0) < 400) return;
+  closeSheet();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+let toastTimer = null;
+function toast(msg, withUndo){
+  $('#toastMsg').textContent = msg;
+  $('#toastUndo').hidden = !withUndo || !S.undo;
+  $('#toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, withUndo ? 4500 : 3200);
+}
+function showUndoToast(msg){ toast(msg, true); }
+function hideToast(){ $('#toast').hidden = true; }
+$('#toastUndo').addEventListener('click', undo);
+
+/* ===================== Sheets ===================== */
+function openJoin(){
+  if (S.onboardOpen) return;
+  const suggested = (S.myName || '').trim().split(/\s+/)[0] || '';
+  S.onboardOpen = true;
+  openSheet(`<h2 id="sheetTitle">Join the swap group</h2>
+    <p>Who's collecting? You can change this later in Settings.</p>
+    <label class="f" for="joinAdult">Adult name</label>
+    <input type="text" id="joinAdult" maxlength="24" value="${esc(suggested)}" autocomplete="given-name">
+    <label class="f" for="joinChild">Child name <small class="muted">(leave blank if the cards are yours)</small></label>
+    <input type="text" id="joinChild" maxlength="24" autocomplete="off">
+    <p class="help" id="joinPreview"></p>
+    <p class="flag" id="joinErr" hidden></p>
+    <div class="sheet-actions"><button type="button" class="btn primary" id="joinGo">Join</button></div>`, root => {
+      const preview = () => {
+        const a = cleanName(root.querySelector('#joinAdult').value), c = cleanName(root.querySelector('#joinChild').value);
+        root.querySelector('#joinPreview').textContent = a ? `Friends will see: ${c ? `${c} (${a})` : a}` : '';
+      };
+      root.querySelector('#joinAdult').addEventListener('input', preview);
+      root.querySelector('#joinChild').addEventListener('input', preview);
+      preview();
+      const go = async () => {
+        const adult = cleanName(root.querySelector('#joinAdult').value);
+        const child = cleanName(root.querySelector('#joinChild').value);
+        if (!adult){ root.querySelector('#joinAdult').focus(); return; }
+        root.querySelector('#joinGo').disabled = true;
+        S.local[S.uid] = newDoc(S.uid, adult, child);
+        S.dirty.add(S.uid);
+        S.activeId = S.uid;
+        const ok = await flush(S.uid);
+        if (ok){ closeSheet(); renderAll(); toast("You're in. Start adding cards."); }
+        else {
+          delete S.local[S.uid];
+          const err = root.querySelector('#joinErr');
+          err.hidden = false;
+          err.textContent = S.readOnly ? "You can see the swap list but can't join it. Ask whoever shared this page to invite you with Can edit access." : "Couldn't join just now. Check your connection and try again.";
+          root.querySelector('#joinGo').disabled = false;
+          renderAll();
+        }
+      };
+      root.querySelector('#joinGo').addEventListener('click', go);
+      root.querySelectorAll('#joinAdult,#joinChild').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }));
+    });
+  const obs = new MutationObserver(() => { if ($('#sheet').hidden){ S.onboardOpen = false; obs.disconnect(); } });
+  obs.observe($('#sheet'), { attributes: true, attributeFilter: ['hidden'] });
+}
+function copiesLabel(n){ return n === 0 ? "You need this card" : n === 1 ? 'Got it, no swaps' : `Got it + ${plural(n - 1, 'swap')}`; }
+function openCardEditor(id){
+  if (!canWriteActive()){ needJoin(); return; }
+  if (!$('#sheet').hidden && S.editing === id) return;
+  const c = BY_ID.get(id); if (!c) return;
+  S.editing = id;
+  const start = cnt(activeDoc(), id);
+  const setName = c.set === 'base' ? (c.fs ? 'Base set · Future Stars' : 'Base set') : SET_BY_CODE[c.set].name;
+  openSheet(`<h2 id="sheetTitle">${c.id} · ${esc(c.name)}</h2>
+    <p class="meta">${esc(CLUBS[c.club][0])} · ${esc(setName)}${c.rare ? ' · ★' : ''}</p>
+    <p style="margin-top:14px"><b>How many have you got?</b></p>
+    <div class="stepper"><button type="button" class="key" id="edMinus" aria-label="One fewer">−</button><output id="edCount" aria-live="polite"></output><button type="button" class="key" id="edPlus" aria-label="One more">+</button></div>
+    <p class="help" id="edLabel" style="text-align:center"></p>
+    <div class="sheet-actions"><button type="button" class="btn" id="edNeed">Set to 0 (need it)</button><button type="button" class="btn primary" data-close>Done</button></div>`, root => {
+      const show = () => {
+        const n = cnt(activeDoc(), id);
+        root.querySelector('#edCount').textContent = n;
+        root.querySelector('#edLabel').textContent = copiesLabel(n);
+        root.querySelector('#edMinus').disabled = n === 0;
+      };
+      const setTo = n => {
+        n = Math.max(0, Math.min(99, n));
+        const doc = mutable(S.activeId);
+        if (n > 0) doc.counts[id] = n; else delete doc.counts[id];
+        S.undo = { pid: S.activeId, prev: { [id]: start } };
+        scheduleSave(S.activeId); updateTile(id, false); renderSummary(); renderBadges(); show();
+      };
+      root.querySelector('#edMinus').addEventListener('click', () => setTo(cnt(activeDoc(), id) - 1));
+      root.querySelector('#edPlus').addEventListener('click', () => setTo(cnt(activeDoc(), id) + 1));
+      root.querySelector('#edNeed').addEventListener('click', () => setTo(0));
+      show();
+    });
+}
+function openSettings(){
+  const d = activeDoc(); if (!d) return;
+  const editable = canWriteActive();
+  const setChips = [`<label><input type="checkbox" name="scope" value="base" ${d.scope.includes('base') ? 'checked' : ''}> Base set 1–300</label>`]
+    .concat(SETS.map(s => `<label><input type="checkbox" name="scope" value="${s.code}" ${d.scope.includes(s.code) ? 'checked' : ''}> ${esc(s.name)}</label>`)).join('');
+  const isManaged = S.isOwner && d.managed;
+  openSheet(`<h2 id="sheetTitle">Settings · ${esc(d.full)}</h2>
+    <label class="f" for="setAdult">Adult name</label>
+    <input type="text" id="setAdult" maxlength="24" value="${esc(d.adult)}" ${editable ? '' : 'disabled'}>
+    <label class="f" for="setChild">Child name <small class="muted">(leave blank if the cards are yours)</small></label>
+    <input type="text" id="setChild" maxlength="24" value="${esc(d.child || '')}" ${editable ? '' : 'disabled'}>
+    <label class="f">Cards I'm collecting</label>
+    <p class="help" style="margin-top:0">Your needs only count cards in these sets. Most people collect the base set; tick insert sets you're chasing too.</p>
+    <div class="setchips">${setChips}</div>
+    <label class="f" for="setOther">Other swaps (parallels, autographs, numbered cards)</label>
+    <textarea id="setOther" rows="3" maxlength="400" placeholder="e.g. Palmer green /99, Saka PL parallel" ${editable ? '' : 'disabled'}>${esc(d.other || '')}</textarea>
+    <div class="sheet-actions"><button type="button" class="btn primary" id="setSave" ${editable ? '' : 'disabled'}>Save settings</button></div>
+    <div class="sheet-actions">
+      <button type="button" class="btn small danger" id="clearAll" ${editable ? '' : 'disabled'}>Clear all cards</button>
+      ${isManaged ? '<button type="button" class="btn small danger" id="removeManaged">Remove this friend</button>' : ''}
+    </div>
+    <p class="flag" id="confirmMsg" hidden></p>
+    ${isWeb() && S.authUser && S.activeId === S.uid ? `<h4 style="margin-top:18px">Your account</h4>
+      <p>${S.authUser.anon ? 'Using this phone only. If you lose this phone or clear the browser, your list goes with it.' : `Signed in with Google${S.authUser.name ? ' as ' + esc(S.authUser.name) : ''}.`}</p>
+      <div class="sheet-actions">${S.authUser.anon ? '<button type="button" class="btn small primary" id="linkGoogle">Keep my list safe with Google</button>' : ''}<button type="button" class="btn small" id="signOutBtn">Sign out</button></div>
+      <p class="flag" id="acctMsg" hidden></p>` : ''}`, root => {
+      const lg = root.querySelector('#linkGoogle');
+      if (lg) lg.addEventListener('click', () => linkGoogle(root));
+      const so = root.querySelector('#signOutBtn');
+      if (so) so.addEventListener('click', () => {
+        if (S.authUser && S.authUser.anon && so.dataset.armed !== '1'){
+          so.dataset.armed = '1'; so.textContent = 'Sign out anyway';
+          const m = root.querySelector('#acctMsg'); m.hidden = false; m.textContent = "You'll lose access to this list unless you keep it safe with Google first.";
+          return;
+        }
+        S.fb.F.signOut(S.fb.auth).then(() => closeSheet()).catch(() => toast("Couldn't sign out"));
+      });
+      root.querySelector('#setSave').addEventListener('click', () => {
+        const doc = mutable(S.activeId);
+        setNames(doc, root.querySelector('#setAdult').value || doc.adult, root.querySelector('#setChild').value);
+        const scope = [...root.querySelectorAll('input[name=scope]:checked')].map(i => i.value);
+        doc.scope = scope.length ? scope : ['base'];
+        doc.other = root.querySelector('#setOther').value.slice(0, 400);
+        scheduleSave(S.activeId); closeSheet(); renderAll(); toast('Settings saved');
+      });
+      let armed = null;
+      const arm = (btn, msg, fn) => btn.addEventListener('click', () => {
+        if (armed === btn){ fn(); return; }
+        armed = btn; const m = root.querySelector('#confirmMsg'); m.hidden = false; m.textContent = msg; btn.textContent = 'Tap again to confirm';
+      });
+      arm(root.querySelector('#clearAll'), `This removes every card from ${d.nick}'s list.`, () => {
+        const doc = mutable(S.activeId); S.undo = { pid: S.activeId, prev: { ...doc.counts } }; doc.counts = {};
+        scheduleSave(S.activeId); closeSheet(); renderAll(); toast('All cards cleared', true);
+      });
+      const rm = root.querySelector('#removeManaged');
+      if (rm) arm(rm, `This deletes ${d.nick} from the swap group.`, async () => {
+        const id = S.activeId;
+        try { await S.db.doc('players/' + id).delete(); delete S.local[id]; delete S.players[id]; S.activeId = S.uid; closeSheet(); renderAll(); toast('Friend removed'); }
+        catch { toast("Couldn't remove them just now"); }
+      });
+    });
+}
+function openWhoSheet(){
+  if (isWeb() && !S.uid){ openWelcome(); return; }
+  const d = getDoc(S.uid);
+  if (!d && S.db && S.uid && !S.readOnly){ openJoin(); return; }
+  if (!S.isOwner){ if (activeDoc()) openSettings(); else toast('Sign in to Claude to join'); return; }
+  const managed = allPlayers().filter(p => p.managed);
+  const rows = [d].concat(managed).filter(Boolean).map(p => `<button type="button" class="frow" data-switch="${esc(p.id)}">${avatar(p)}<span class="t"><b>${esc(p.full)}${p.id === S.uid ? ' <span class="pill">You</span>' : ' <span class="pill">Managed</span>'}</b><small>${p.id === S.activeId ? 'Editing now' : 'Tap to edit this list'}${incomingFor(p.id).length ? ' · swap offer waiting' : ''}</small></span></button>`).join('');
+  openSheet(`<h2 id="sheetTitle">Whose cards are you editing?</h2>
+    <p class="help">You can keep lists for friends who ${isWeb() ? "don't use the app" : "aren't on Claude"}. Their swaps show up for everyone.</p>
+    ${rows}
+    <div class="sheet-actions"><button type="button" class="btn small" id="addManaged2">${isWeb() ? 'Keep a list for someone' : "Add a friend who isn't on Claude"}</button><button type="button" class="btn small ghost" id="whoSettings">Settings for ${esc((activeDoc() || {}).nick || 'this list')}</button></div>`, root => {
+      root.querySelectorAll('[data-switch]').forEach(b => b.addEventListener('click', () => switchProfile(b.dataset.switch)));
+      root.querySelector('#addManaged2').addEventListener('click', openAddManaged);
+      root.querySelector('#whoSettings').addEventListener('click', () => { closeSheet(); openSettings(); });
+    });
+}
+function switchProfile(id){
+  flushAll();
+  S.activeId = id; S.padBuf = ''; S.padLog = []; S.undo = null;
+  renderPadLog(false);
+  closeSheet(); renderAll();
+  toast(`Now editing ${getDoc(id).nick}'s cards`);
+}
+function openAddManaged(){
+  openSheet(`<h2 id="sheetTitle">${isWeb() ? 'Keep a list for someone' : "Add a friend who isn't on Claude"}</h2>
+    <p>You'll keep their list for them, for example from a list they send you on WhatsApp. Everyone sees their swaps.</p>
+    <label class="f" for="mAdult">Adult name</label>
+    <input type="text" id="mAdult" maxlength="24">
+    <label class="f" for="mChild">Child name <small class="muted">(optional)</small></label>
+    <input type="text" id="mChild" maxlength="24">
+    <div class="sheet-actions"><button type="button" class="btn primary" id="mGo">Add and edit their cards</button></div>`, root => {
+      const go = async () => {
+        const adult = cleanName(root.querySelector('#mAdult').value), child = cleanName(root.querySelector('#mChild').value);
+        if (!adult){ root.querySelector('#mAdult').focus(); return; }
+        root.querySelector('#mGo').disabled = true;
+        const id = 'm-' + Math.random().toString(36).slice(2, 10);
+        const doc = newDoc(id, adult, child); doc.managed = true;
+        S.local[id] = doc; S.dirty.add(id);
+        const ok = await flush(id);
+        if (ok){ S.tab = 'cards'; store.set('tab', 'cards'); S.addMode = 'list'; switchProfile(id); window.scrollTo(0, 0); }
+        else { delete S.local[id]; root.querySelector('#mGo').disabled = false; toast("Couldn't add them just now"); }
+      };
+      root.querySelector('#mGo').addEventListener('click', go);
+      root.querySelectorAll('#mAdult,#mChild').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }));
+    });
+}
+function openFriend(id){
+  const p = getDoc(id); if (!p) return;
+  const me = activeDoc();
+  const sw = ALL.filter(c => cnt(p, c.id) > 1);
+  const needs = p.complete ? ALL.filter(c => cnt(p, c.id) === 0 && inScope(p, c)) : [];
+  const swChips = sw.length ? `<div class="chips">${sw.map(c => cardChip(c, me && cnt(me, c.id) === 0 && inScope(me, c) ? 'get hit' : '', cnt(p, c.id) > 2 ? ` ×${cnt(p, c.id) - 1}` : '')).join('')}</div>` : '<small class="muted">No swaps listed yet.</small>';
+  const needChips = !p.complete ? `<small class="muted">${esc(p.nick)} hasn't switched on their needs.</small>`
+    : needs.length ? `<div class="chips">${needs.slice(0, 120).map(c => cardChip(c, me && cnt(me, c.id) > 1 ? 'give hit' : '')).join('')}${needs.length > 120 ? `<span class="chip">+${needs.length - 120} more</span>` : ''}</div>` : '<small class="muted">Needs nothing. Set complete!</small>';
+  const st = stats(p);
+  const ownerTools = S.isOwner && p.managed ? `<div class="sheet-actions"><button type="button" class="btn small primary" id="fEdit">Edit their cards</button></div>` : '';
+  openSheet(`<h2 id="sheetTitle">${esc(p.full)}</h2>
+    <p class="meta">Base ${st.base}/300 · ${st.ins} inserts · ${p.demo ? 'demo' : ago(p.updatedAt)}</p>
+    <h4 style="margin-top:14px">Swaps · ${sw.length}${me && p.id !== S.activeId ? ' <small>(green outline = you need it)</small>' : ''}</h4>${swChips}
+    <h4 style="margin-top:14px">Needs${p.complete ? ' · ' + needs.length : ''}${me && p.id !== S.activeId && p.complete ? ' <small>(green outline = you have a spare)</small>' : ''}</h4>${needChips}
+    ${p.other ? `<h4 style="margin-top:14px">Other swaps</h4><p>${esc(p.other)}</p>` : ''}
+    ${ownerTools}`, root => {
+      const b = root.querySelector('#fEdit');
+      if (b) b.addEventListener('click', () => { switchProfile(p.id); S.tab = 'cards'; store.set('tab', 'cards'); renderAll(); });
+    });
+}
+function openOffer(fid){
+  const me = activeDoc(); const f = getDoc(fid);
+  if (!me || !f || f.demo) return;
+  if (!canWriteActive()){ needJoin(); return; }
+  const m = computeMatch(me, f);
+  const promised = promisedSpares(me);
+  const k = m.score;
+  let gi = 0, gv = 0;
+  const row = (c, side, checked, note) => `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" ${checked ? 'checked' : ''} ${note ? 'disabled' : ''}> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}${note ? ' · ' + note : ''}</small></label></li>`;
+  const getRows = m.get.map(c => row(c, 'get', gi++ < k, '')).join('');
+  const giveRows = m.give.map(c => {
+    const free = cnt(me, c.id) - 1 - (promised[c.id] || 0);
+    const note = free > 0 ? '' : 'already in another offer';
+    return row(c, 'give', !note && gv++ < k, note);
+  }).join('');
+  openSheet(`<h2 id="sheetTitle">Swap offer to ${esc(f.full)}</h2>
+    <p>Tick the cards for this swap. When ${esc(f.nick)} accepts, both your lists update.</p>
+    <h4 style="margin-top:12px">You get from ${esc(f.nick)}</h4>${getRows ? `<ul class="scanlist">${getRows}</ul>` : '<small class="muted">Nothing they have spare that you need.</small>'}
+    <h4 style="margin-top:12px">You give to ${esc(f.nick)}</h4>${giveRows ? `<ul class="scanlist">${giveRows}</ul>` : `<small class="muted">${f.complete ? 'Nothing of yours that they need.' : esc(f.nick) + " hasn't switched on their needs yet."}</small>`}
+    <div class="sheet-actions"><button type="button" class="btn gold" id="offerGo">Send offer</button></div>`, root => {
+      root.querySelector('#offerGo').addEventListener('click', async () => {
+        const pick = side => [...root.querySelectorAll(`input[data-side="${side}"]:checked`)].map(i => i.value);
+        const get = pick('get'), give = pick('give');
+        if (!get.length && !give.length){ toast('Tick at least one card'); return; }
+        root.querySelector('#offerGo').disabled = true;
+        const pid = S.activeId;
+        const d = mutable(pid);
+        d.offers = d.offers || [];
+        d.offers.push({ id: 'o' + Math.random().toString(36).slice(2, 11), to: f.id, give, get, at: Date.now(), st: 'open' });
+        pruneOffers(d);
+        S.dirty.add(pid);
+        const ok = await flush(pid);
+        closeSheet(); renderAll();
+        toast(ok ? `Offer sent to ${f.nick}` : "Offer not sent yet. It'll retry.");
+      });
+    });
+}
+async function respondOffer(fromId, offerId, accept){
+  const pid = S.activeId;
+  if (!canWriteActive()){ needJoin(); return; }
+  const from = getDoc(fromId);
+  const o = from && (from.offers || []).find(x => x.id === offerId && x.st === 'open');
+  if (!o){ toast('That offer was withdrawn'); renderAll(); return; }
+  const d = mutable(pid);
+  d.replies = d.replies || {};
+  if (d.replies[offerId]) return;
+  if (accept) acceptInto(d, o);
+  d.replies[offerId] = { s: accept ? 'accepted' : 'declined', at: Date.now() };
+  pruneReplies(d);
+  S.undo = null;
+  S.dirty.add(pid);
+  const ok = await flush(pid);
+  renderAll();
+  if (!ok) toast("Couldn't save just now. It'll retry.");
+  else toast(accept ? `Swap accepted. Your cards are updated. ${from.nick}'s update when they next open the app.` : 'Offer declined');
+}
+async function cancelOffer(offerId){
+  const pid = S.activeId;
+  if (!canWriteActive()) return;
+  const d = mutable(pid);
+  const o = (d.offers || []).find(x => x.id === offerId);
+  if (!o || o.st !== 'open') return;
+  o.st = 'cancelled';
+  S.dirty.add(pid);
+  await flush(pid);
+  renderAll(); toast('Offer cancelled');
+  scheduleSettle();
+}
+function swapMessage(me, m){
+  const fmt = cs => cs.map(c => `${c.id} ${c.name}`).join(', ');
+  const lines = [`Swap? Topps Premier League 26/27`];
+  if (m.get.length) lines.push(`You've got spares I need: ${fmt(m.get)}`);
+  if (m.give.length) lines.push(`I've got spares you need: ${fmt(m.give)}`);
+  if (!m.f.complete) lines.push(`What are you still after?`);
+  return lines.join('\n');
+}
+async function copyText(text, okMsg){
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okMsg || 'Copied. Paste it into WhatsApp.');
+  } catch {
+    openSheet(`<h2 id="sheetTitle">Copy this</h2><p class="help">Select the text and copy it.</p><textarea id="copyBox" rows="8" readonly>${esc(text)}</textarea><div class="sheet-actions"><button type="button" class="btn" data-close>Done</button></div>`,
+      root => { const t = root.querySelector('#copyBox'); setTimeout(() => { t.focus(); t.select(); }, 30); });
+  }
+}
+function openDone(fid){
+  const me = activeDoc(); const f = getDoc(fid); if (!me || !f || f.demo) return;
+  const m = computeMatch(me, f);
+  const k = m.score || Math.max(m.get.length ? 0 : 0, 0);
+  const li = (c, side, i) => `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" ${i < k ? 'checked' : ''}> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}</small></label></li>`;
+  const canBoth = S.isOwner && (f.managed) && !f.demo;
+  openSheet(`<h2 id="sheetTitle">Swapped with ${esc(f.nick)}?</h2>
+    <p>Tick the cards that changed hands. ${canBoth ? `We'll update both your list and ${esc(f.nick)}'s.` : f.demo ? 'Demo friends are not saved.' : `This updates your list. ${esc(f.nick)} marks it on their side.`}</p>
+    <h4 style="margin-top:12px">You got</h4>${m.get.length ? `<ul class="scanlist">${m.get.map((c, i) => li(c, 'get', i)).join('')}</ul>` : '<small class="muted">Nothing</small>'}
+    <h4 style="margin-top:12px">You gave</h4>${m.give.length ? `<ul class="scanlist">${m.give.map((c, i) => li(c, 'give', i)).join('')}</ul>` : '<small class="muted">Nothing</small>'}
+    <div class="sheet-actions"><button type="button" class="btn gold" id="doneGo">Update my cards</button></div>`, root => {
+      root.querySelector('#doneGo').addEventListener('click', () => {
+        const got = [...root.querySelectorAll('input[data-side=get]:checked')].map(i => i.value);
+        const gave = [...root.querySelectorAll('input[data-side=give]:checked')].map(i => i.value);
+        if (!got.length && !gave.length){ toast('Tick at least one card'); return; }
+        if (!canWriteActive()){ needJoin(); return; }
+        const doc = mutable(S.activeId);
+        const prev = {};
+        for (const id of got){ prev[id] = doc.counts[id] || 0; doc.counts[id] = Math.min(99, (doc.counts[id] || 0) + 1); }
+        for (const id of gave){ if (!(id in prev)) prev[id] = doc.counts[id] || 0; const v = (doc.counts[id] || 0) - 1; if (v > 0) doc.counts[id] = v; else delete doc.counts[id]; }
+        S.undo = { pid: S.activeId, prev };
+        scheduleSave(S.activeId);
+        if (canBoth){
+          const fd = mutable(f.id);
+          for (const id of gave) fd.counts[id] = Math.min(99, (fd.counts[id] || 0) + 1);
+          for (const id of got){ const v = (fd.counts[id] || 0) - 1; if (v > 0) fd.counts[id] = v; else delete fd.counts[id]; }
+          scheduleSave(f.id);
+        }
+        closeSheet(); renderAll();
+        toast(`Updated: ${plural(got.length, 'card')} in, ${got.length !== gave.length || gave.length ? plural(gave.length, 'card') + ' out' : ''}`.replace(/, $/, ''), true);
+      });
+    });
+}
+
+/* ===================== Photo scan (Claude) ===================== */
+function scanPrompt(){
+  const lines = ALL.map(c => `${c.id}|${c.name}|${CLUBS[c.club][0]}|${c.set === 'base' ? (c.fs ? 'Base (Future Stars)' : 'Base') : SET_BY_CODE[c.set].name}`).join('\n');
+  return `This photo shows Topps Flagship Premier League 2026/27 football trading cards. Identify every card you can see.
+
+Card backs show the card number: 1 to 300 for the base set, or an insert code such as AK1, 8B7, RTN3 or SPL12. Card fronts show the player and club; insert cards have their own designs and the insert set's name.
+
+Use this checklist (id|player|club|set) to give each card's exact id:
+${lines}
+
+Rules:
+- One entry per different card. If the same card appears more than once, set "count" to how many copies you can see.
+- If you can read the number or code on the card, use it.
+- If you only see the front, match on player and club. If you can't tell which version it is, use the base card id and set "unsure": true.
+- Leave out anything you can't identify. Never guess a player you can't read.
+
+Reply with only a JSON array, for example: [{"id":"32","count":1},{"id":"AK1","count":2,"unsure":true}]`;
+}
+async function prepImage(file){
+  const lim = S.imgLimits || {};
+  const types = lim.mediaTypes || ['image/jpeg', 'image/png', 'image/webp'];
+  if (types.includes(file.type) && (!lim.maxInputBytes || file.size <= lim.maxInputBytes)) return file;
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(bmp.width * scale); cv.height = Math.round(bmp.height * scale);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('convert')), 'image/jpeg', 0.88));
+}
+function normaliseScan(out){
+  const arr = Array.isArray(out) ? out : (out && Array.isArray(out.cards) ? out.cards : []);
+  const merged = new Map();
+  for (const r of arr){
+    if (!r || typeof r !== 'object') continue;
+    let id = String(r.id || '').toUpperCase().replace(/[#\s-]/g, '');
+    if (/^\d+$/.test(id)) id = String(parseInt(id, 10));
+    if (!BY_ID.has(id)) continue;
+    const n = clampInt(r.count || 1, 1, 20);
+    const prev = merged.get(id);
+    merged.set(id, { id, n: (prev ? prev.n : 0) + n, unsure: !!(r.unsure || (prev && prev.unsure)) });
+  }
+  return [...merged.values()];
+}
+async function startScan(file){
+  const url = URL.createObjectURL(file);
+  const ctl = new AbortController();
+  openSheet(`<h2 id="sheetTitle">Reading your cards…</h2>
+    <p class="muted" id="scanStatus">Claude is looking at the photo. This can take up to a minute.</p>
+    <img class="scanimg" src="${url}" alt="Your photo">
+    <div class="sheet-actions"><button type="button" class="btn" id="scanStop">Stop</button></div>`, root => {
+      root.querySelector('#scanStop').addEventListener('click', () => { ctl.abort(); closeSheet(); });
+    });
+  try {
+    const blob = await prepImage(file);
+    const out = await S.sample.json(scanPrompt(), { images: [blob], modelTier: 'default', signal: ctl.signal });
+    const items = normaliseScan(out);
+    showScanResults(items, url);
+  } catch (e){
+    const code = e && e.code;
+    if (code === 'cancelled') return;
+    if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'images_unavailable'].includes(code)){
+      S.scanOff = true; renderPhotoPane();
+    }
+    const msg = code === 'rate_limited' ? 'Claude is busy or you have hit a usage limit. Try again in a while.'
+      : code === 'image_rejected' ? "That image couldn't be read. Try a JPEG or PNG photo."
+      : code === 'invalid_json' || code === 'empty_completion' ? "Claude couldn't make out the cards. Try a closer, brighter photo with fewer cards."
+      : code === 'not_granted' ? 'Photo reading needs permission to use Claude.'
+      : "Something went wrong reading the photo. Try again, or use the number pad.";
+    if (!$('#sheet').hidden) $('#sheetBody').innerHTML = `<h2 id="sheetTitle">Couldn't read the photo</h2><p>${esc(msg)}</p><div class="sheet-actions"><button type="button" class="btn" data-close>Close</button></div>`;
+  }
+}
+function showScanResults(items, url){
+  if ($('#sheet').hidden) return;
+  if (!items.length){
+    $('#sheetBody').innerHTML = `<h2 id="sheetTitle">No cards found</h2><p>Claude couldn't match any cards in that photo. Try backs up, closer and in better light.</p><div class="sheet-actions"><button type="button" class="btn" data-close>Close</button></div>`;
+    return;
+  }
+  const total = items.reduce((a, b) => a + b.n, 0);
+  $('#sheetBody').innerHTML = `<h2 id="sheetTitle">Found ${plural(total, 'card')}</h2>
+    <p>Untick anything that's wrong, then add them.</p>
+    <img class="scanimg" src="${url}" alt="Your photo">
+    <ul class="scanlist">${items.map(it => { const c = BY_ID.get(it.id); return `<li><label><input type="checkbox" checked value="${c.id}" data-n="${it.n}"> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}</small>${it.n > 1 ? ` ×${it.n}` : ''}${it.unsure ? ' <span class="flag">check version</span>' : ''}</label></li>`; }).join('')}</ul>
+    <div class="sheet-actions"><button type="button" class="btn gold" data-addas="swap">Add as swaps</button><button type="button" class="btn primary" data-addas="got">Add as got</button></div>`;
+  $('#sheetBody').querySelectorAll('[data-addas]').forEach(b => b.addEventListener('click', () => {
+    const chosen = [...$('#sheetBody').querySelectorAll('input[type=checkbox]:checked')].map(i => ({ id: i.value, n: parseInt(i.dataset.n, 10) || 1 }));
+    if (!chosen.length){ toast('Tick at least one card'); return; }
+    const changed = applyItems(chosen, b.dataset.addas);
+    closeSheet(); renderAll();
+    if (changed) toast(`${plural(changed, 'card')} updated`, true);
+  }));
+}
+
+/* ===================== Demo friends (local only) ===================== */
+function mulberry32(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function makeDemo(){
+  const rnd = mulberry32(2627);
+  const mk = (id, adult, child, p, hours) => {
+    const counts = {};
+    for (const c of ALL){
+      const r = rnd();
+      if (c.set === 'base'){ if (r < p) counts[c.id] = r < p * 0.35 ? 2 + (rnd() < 0.3 ? 1 : 0) : 1; }
+      else if (r < 0.06) counts[c.id] = rnd() < 0.35 ? 2 : 1;
+    }
+    return setNames({ id, counts, complete: true, scope: ['base'], other: '', managed: false, demo: true, updatedAt: Date.now() - hours * 3600e3, offers: [], replies: {} }, adult, child);
+  };
+  return [mk('demo-sam', 'Sam', 'Alfie', 0.55, 3), mk('demo-priya', 'Priya', 'Maya', 0.7, 26)];
+}
+
+/* ===================== Events ===================== */
+document.querySelector('.tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (!b) return;
+  S.tab = b.dataset.tab; store.set('tab', S.tab); renderAll();
+});
+document.querySelector('.tabs').addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const order = ['cards', 'swaps', 'friends'];
+  const i = (order.indexOf(S.tab) + (e.key === 'ArrowRight' ? 1 : 2)) % 3;
+  S.tab = order[i]; store.set('tab', S.tab); renderAll(); $('#tab-' + S.tab).focus();
+});
+document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => {
+  S.mode = b.dataset.mode; store.set('mode', S.mode); renderModes(); renderGrid(); renderPreview();
+}));
+document.querySelectorAll('[data-am]').forEach(b => b.addEventListener('click', () => {
+  S.addMode = b.dataset.am; store.set('addMode', S.addMode); renderAddMode();
+}));
+$('#keypad').addEventListener('click', e => { const k = e.target.closest('[data-k]'); if (k) padPress(k.dataset.k); });
+$('#padLog').addEventListener('click', e => { if (e.target.closest('#padUndo')){ undo(); S.padLog.shift(); renderPadLog(false); } });
+$('#padSet').innerHTML = `<option value="base">Base 1–300</option>` + SETS.map(s => `<option value="${s.code}">${esc(s.code)} · ${esc(s.name)}</option>`).join('');
+$('#padSet').addEventListener('change', e => { S.padSet = e.target.value; S.padBuf = ''; renderPad(); });
+document.addEventListener('keydown', e => {
+  if (S.tab !== 'cards' || S.addMode !== 'pad' || !$('#sheet').hidden) return;
+  const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^[0-9]$/.test(e.key)){ padPress(e.key); e.preventDefault(); }
+  else if (e.key === 'Backspace'){ padPress('back'); e.preventDefault(); }
+  else if (e.key === 'Enter' && t.tagName !== 'BUTTON' && padCard()){ padPress('go'); e.preventDefault(); }
+});
+$('#entry').addEventListener('input', renderPreview);
+$('#entryForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const { items } = parseEntry($('#entry').value);
+  if (!items.length) return;
+  const changed = applyItems(items, S.mode);
+  if (changed){ $('#entry').value = ''; renderAll(); showUndoToast(`${plural(changed, 'card')} updated`); }
+});
+$('#section').innerHTML = sectionOptions();
+$('#section').addEventListener('change', e => { S.section = e.target.value; S.query = ''; $('#search').value = ''; renderGrid(); });
+$('#search').addEventListener('input', e => { S.query = e.target.value; renderGrid(); });
+document.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => {
+  S.filter = b.dataset.filter;
+  document.querySelectorAll('[data-filter]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderGrid();
+}));
+let press = null;
+$('#grid').addEventListener('pointerdown', e => {
+  const t = e.target.closest('.tile'); if (!t || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const id = t.dataset.id, x = e.clientX, y = e.clientY;
+  press = { id, x, y, timer: setTimeout(() => {
+    press = null; S.suppressClick = Date.now();
+    if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
+    openCardEditor(id);
+  }, 450) };
+});
+const endPress = () => { if (press){ clearTimeout(press.timer); press = null; } };
+$('#grid').addEventListener('pointermove', e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) endPress(); });
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => $('#grid').addEventListener(ev, endPress));
+$('#grid').addEventListener('contextmenu', e => {
+  const t = e.target.closest('.tile'); if (!t) return;
+  e.preventDefault(); endPress(); S.suppressClick = Date.now(); openCardEditor(t.dataset.id);
+});
+$('#grid').addEventListener('click', e => {
+  const t = e.target.closest('.tile'); if (!t) return;
+  if (S.suppressClick && Date.now() - S.suppressClick < 800){ S.suppressClick = 0; return; }
+  tapCard(t.dataset.id);
+});
+$('#gridHint').addEventListener('click', e => {
+  if (!e.target.closest('#tickAll')) return;
+  const d = activeDoc() || EMPTY;
+  const items = visibleCards().filter(c => cnt(d, c.id) === 0).map(c => ({ id: c.id, n: 1 }));
+  const changed = applyItems(items, 'got');
+  if (changed){ renderAll(); showUndoToast(`${plural(changed, 'card')} ticked off`); }
+});
+$('#summary').addEventListener('change', e => {
+  if (e.target.id !== 'completeToggle') return;
+  if (!canWriteActive()){ e.target.checked = !e.target.checked; needJoin(); return; }
+  const doc = mutable(S.activeId); doc.complete = e.target.checked; scheduleSave(S.activeId);
+  renderBadges();
+  toast(doc.complete ? 'Friends can now see what you need' : 'Your needs are hidden from friends');
+});
+$('#summary').addEventListener('click', e => {
+  if (e.target.closest('#copyMine')){
+    const d = activeDoc(); if (!d) return;
+    const sw = ALL.filter(c => cnt(d, c.id) > 1).map(c => c.id + (cnt(d, c.id) > 2 ? ' x' + (cnt(d, c.id) - 1) : ''));
+    if (!sw.length){ toast('No swaps on your list yet'); return; }
+    copyText(`${d.nick}'s swaps · Topps Premier League 26/27\n${sw.join(', ')}`, 'Swaps list copied');
+  }
+  if (e.target.closest('#openSettings')) openSettings();
+  if (e.target.closest('#joinBtn')) openJoin();
+  if (e.target.closest('#joinBtnWeb')) openWelcome();
+  if (e.target.closest('#showSwaps')){
+    S.section = 'all'; S.filter = 'swap'; S.query = '';
+    $('#section').value = 'all'; $('#search').value = '';
+    document.querySelectorAll('[data-filter]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.filter === 'swap')));
+    renderGrid();
+    $('#browse').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  }
+});
+$('#who').addEventListener('click', openWhoSheet);
+$('#notice').addEventListener('click', e => {
+  if (e.target.closest('#retrySave')){ S.saveFailed = false; flushAll(); renderNotice(); }
+  if (e.target.closest('#noticeJoin')) openWelcome();
+});
+$('#addPanel').addEventListener('click', e => {
+  if (e.target.closest('#scanBtn')){ if (!canWriteActive()){ needJoin(); return; } $('#photoInput').click(); return; }
+  if (e.target.closest('#aiCopy')){ copyText(aiPrompt(), 'Instructions copied. Now open your AI app.'); return; }
+  const add = e.target.closest('[data-aiadd]');
+  if (add){
+    const { items } = parseEntry(aiSource($('#aiReply').value));
+    if (!items.length) return;
+    const changed = applyItems(items, add.dataset.aiadd);
+    if (changed){ $('#aiReply').value = ''; renderAiPreview(); renderAll(); showUndoToast(`${plural(changed, 'card')} updated`); }
+  }
+});
+$('#addPanel').addEventListener('input', e => { if (e.target.id === 'aiReply') renderAiPreview(); });
+$('#photoInput').addEventListener('change', () => { const f = $('#photoInput').files[0]; $('#photoInput').value = ''; if (f) startScan(f); });
+$('#view-swaps').addEventListener('click', e => {
+  const of = e.target.closest('[data-offer]'); if (of){ openOffer(of.dataset.offer); return; }
+  const ac = e.target.closest('[data-accept]'); if (ac){ ac.disabled = true; respondOffer(ac.dataset.accept, ac.dataset.oid, true); return; }
+  const de = e.target.closest('[data-decline]'); if (de){ de.disabled = true; respondOffer(de.dataset.decline, de.dataset.oid, false); return; }
+  const ca = e.target.closest('[data-cancel]'); if (ca){ cancelOffer(ca.dataset.cancel); return; }
+  const c = e.target.closest('[data-copy]');
+  if (c){ const me = activeDoc(); const f = getDoc(c.dataset.copy); if (me && f) copyText(swapMessage(me, computeMatch(me, f))); return; }
+  const d = e.target.closest('[data-done]'); if (d){ openDone(d.dataset.done); return; }
+  const x = e.target.closest('[data-expand]'); if (x){ const k = x.dataset.expand; S.expanded.has(k) ? S.expanded.delete(k) : S.expanded.add(k); renderSwaps(); return; }
+  if (e.target.closest('#demoOn')){ S.demo = true; S.demoPlayers = makeDemo(); renderAll(); return; }
+  if (e.target.closest('#demoOff')){ S.demo = false; S.demoPlayers = []; renderAll(); return; }
+  if (e.target.closest('#joinBtn2')){ if (isWeb() && !S.uid) openWelcome(); else openJoin(); }
+});
+$('#view-friends').addEventListener('click', e => {
+  const f = e.target.closest('[data-friend]'); if (f){ openFriend(f.dataset.friend); return; }
+  if (e.target.closest('#addManaged')) openAddManaged();
+  if (e.target.closest('#copyInvite')) copyText(location.origin + location.pathname, 'Link copied. Paste it into WhatsApp.');
+});
+
+/* ===================== Firebase platform (standalone web version) ===================== */
+function fbErr(e){
+  const c = e && e.code;
+  return { code: c === 'permission-denied' ? 'invalid_argument' : c === 'resource-exhausted' ? 'quota_exceeded' : c === 'unauthenticated' ? 'revoked' : 'unavailable', message: (e && e.message) || '' };
+}
+function makeDbShim(F, fs){
+  const wrap = d => ({ id: d.id, exists: true, data: () => d.data(), metadata: d.metadata });
+  return {
+    collection(path){
+      return { onSnapshot(next, error){
+        return F.onSnapshot(F.collection(fs, path),
+          snap => next({ docs: snap.docs.map(wrap), size: snap.size, empty: snap.empty, metadata: snap.metadata }),
+          e => error && error(fbErr(e)));
+      } };
+    },
+    doc(path){
+      const ref = F.doc(fs, path);
+      return {
+        set: data => F.setDoc(ref, data).catch(e => { throw fbErr(e); }),
+        delete: () => F.deleteDoc(ref).catch(e => { throw fbErr(e); }),
+        get: () => F.getDoc(ref).then(x => ({ id: x.id, exists: x.exists(), data: () => x.data(), metadata: x.metadata })).catch(e => { throw fbErr(e); })
+      };
+    }
+  };
+}
+function authErrorText(e){
+  const c = (e && e.code) || '';
+  if (c === 'auth/operation-not-allowed' || c === 'auth/admin-restricted-operation') return "That sign-in option isn't switched on yet. Whoever set up the app needs to enable it in Firebase.";
+  if (c === 'auth/unauthorized-domain') return "This web address isn't allowed to sign in yet. Add it in Firebase under Authentication, Settings, Authorised domains.";
+  if (c === 'auth/network-request-failed') return 'No connection. Check your signal and try again.';
+  if (c === 'auth/credential-already-in-use') return 'That Google account already has its own list.';
+  if (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment' || c === 'auth/web-storage-unsupported') return "Your browser blocked the Google window. Open this link in Chrome or Safari (from WhatsApp: tap ⋯ then Open in browser), or choose Just use this phone.";
+  return "Couldn't sign in. Try again, or open the link in your phone's browser.";
+}
+function openWelcome(){
+  if (!isWeb() || S.uid || S.status === 'noconfig') return;
+  if (S.welcomeOpen && !$('#sheet').hidden) return;
+  openSheet(`<h2 id="sheetTitle">Join the swap group</h2>
+    <p>Swap Topps Premier League 2026/27 cards with your friends. Add your swaps, and it shows who to swap with.</p>
+    <div class="stack">
+      <button type="button" class="btn primary" id="wGoogle">Continue with Google</button>
+      <small class="muted">Your list follows you to any phone.</small>
+      <button type="button" class="btn" id="wAnon">Just use this phone</button>
+      <small class="muted">No account needed. Your list stays on this phone.</small>
+    </div>
+    <p class="flag" id="wErr" hidden></p>`, root => {
+      const err = e => { const m = root.querySelector('#wErr'); if (m){ m.hidden = false; m.textContent = authErrorText(e); } };
+      root.querySelector('#wGoogle').addEventListener('click', () => googleSignIn(err));
+      root.querySelector('#wAnon').addEventListener('click', async () => {
+        try { await S.fb.F.signInAnonymously(S.fb.auth); } catch (e){ err(e); }
+      });
+    });
+  S.welcomeOpen = true;
+}
+async function googleSignIn(onError){
+  const { F, auth } = S.fb;
+  const provider = new F.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  try { await F.signInWithPopup(auth, provider); }
+  catch (e){
+    const c = e && e.code;
+    const sameDomain = location.hostname === String((window.GGN_FIREBASE_CONFIG || {}).authDomain || '');
+    if (sameDomain && (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment' || c === 'auth/web-storage-unsupported')){
+      try { await F.signInWithRedirect(auth, provider); } catch (e2){ onError(e2); }
+    } else if (c !== 'auth/popup-closed-by-user' && c !== 'auth/cancelled-popup-request') onError(e);
+  }
+}
+async function linkGoogle(root){
+  const { F, auth } = S.fb;
+  const provider = new F.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const msg = t => { const m = root.querySelector('#acctMsg'); if (m){ m.hidden = false; m.textContent = t; } };
+  try {
+    const res = await F.linkWithPopup(auth.currentUser, provider);
+    S.authUser = { anon: false, name: res.user.displayName || '', email: res.user.email || '' };
+    await loadAdmin();
+    closeSheet(); renderAll();
+    toast('Done. Your list now follows your Google account.');
+  } catch (e){
+    if (e && e.code === 'auth/credential-already-in-use'){
+      const cred = F.GoogleAuthProvider.credentialFromError(e);
+      msg('That Google account already has its own list. Tap again to switch to it (this phone\'s list stays where it is).');
+      const b = root.querySelector('#linkGoogle');
+      if (b && cred){
+        b.textContent = 'Switch to that account';
+        b.replaceWith(b.cloneNode(true));
+        root.querySelector('#linkGoogle').addEventListener('click', () => F.signInWithCredential(auth, cred).then(() => closeSheet()).catch(x => msg(authErrorText(x))));
+      }
+    } else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') msg(authErrorText(e));
+  }
+}
+async function loadAdmin(){
+  const { F, fs } = S.fb;
+  try {
+    const ref = F.doc(fs, 'config/admin');
+    let snap = await F.getDoc(ref);
+    if (!snap.exists() && S.authUser && !S.authUser.anon){
+      try { await F.setDoc(ref, { uid: S.uid, at: Date.now() }); snap = await F.getDoc(ref); } catch {}
+    }
+    S.adminUid = snap.exists() ? ((snap.data() || {}).uid || null) : null;
+  } catch { S.adminUid = null; }
+  S.isOwner = !!S.adminUid && S.adminUid === S.uid;
+}
+async function onAuth(user){
+  if (!user){
+    if (S.unsub){ S.unsub(); S.unsub = null; }
+    Object.assign(S, { uid: null, authUser: null, isOwner: false, adminUid: null, players: {}, local: {}, loaded: false, activeId: null, status: 'signedout', readOnly: false, onboardAsked: false, seenIncoming: null, demo: false, demoPlayers: [] });
+    S.dirty.clear(); S.saving.clear(); S.again.clear();
+    renderAll(); openWelcome();
+    return;
+  }
+  const changed = S.uid !== user.uid;
+  S.authUser = { anon: !!user.isAnonymous, name: user.displayName || '', email: user.email || '' };
+  S.myName = user.displayName || '';
+  if (!changed){ renderAll(); return; }
+  if (S.unsub){ S.unsub(); S.unsub = null; }
+  Object.assign(S, { uid: user.uid, players: {}, local: {}, loaded: false, onboardAsked: false, seenIncoming: null, readOnly: false, activeId: user.uid, status: 'loading' });
+  if (S.welcomeOpen) closeSheet();
+  renderAll();
+  await loadAdmin();
+  subscribe();
+}
+async function initFirebase(cfg){
+  S.platform = 'firebase';
+  const host = location.hostname, ad = String(cfg.authDomain || '');
+  if (host.endsWith('.web.app') && ad.endsWith('.firebaseapp.com') && host.slice(0, -8) === ad.slice(0, -16)){
+    location.replace('https://' + ad + location.pathname + location.search + location.hash);
+    return;
+  }
+  const F = window.FB;
+  let app, auth, fs;
+  try {
+    app = F.initializeApp(cfg);
+    auth = F.getAuth(app);
+    try { fs = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
+    catch { fs = F.initializeFirestore(app, {}); }
+  } catch (e){ S.status = 'noconfig'; renderAll(); return; }
+  S.fb = { F, app, auth, fs };
+  S.db = makeDbShim(F, fs);
+  S.status = 'auth';
+  renderAll();
+  try { await F.getRedirectResult(auth); } catch (e){ if (e && e.code && e.code !== 'auth/no-auth-event') toast(authErrorText(e)); }
+  F.onAuthStateChanged(auth, user => { onAuth(user); });
+}
+function subscribe(){
+  const slowTimer = setTimeout(() => { if (!S.loaded){ S.slow = true; renderNotice(); } }, 10000);
+  S.unsub = S.db.collection('players').onSnapshot(snap => {
+    const next = {};
+    for (const d of snap.docs){ if (d.exists){ const v = sanitize(d.data(), d.id); if (v) next[d.id] = v; } }
+    S.players = next;
+    for (const id of Object.keys(S.local)) if (id !== 'local' && !S.dirty.has(id) && !S.saving.has(id)) delete S.local[id];
+    if (S.activeId && S.activeId !== S.uid && !getDoc(S.activeId)) S.activeId = S.uid;
+    if (!snap.metadata || !snap.metadata.fromCache){ S.loaded = true; S.slow = false; clearTimeout(slowTimer); }
+    S.status = 'ready';
+    renderAll();
+    if (S.loaded){ noticeIncoming(); scheduleSettle(); }
+    if (S.loaded && S.uid && !getDoc(S.uid) && !S.readOnly && !S.onboardAsked){ S.onboardAsked = true; openJoin(); }
+  }, err => {
+    clearTimeout(slowTimer);
+    S.status = (err && err.code === 'revoked') ? (isWeb() ? 'signedout' : 'nodb') : 'error';
+    renderAll();
+  });
+}
+
+/* ===================== Start ===================== */
+async function init(){
+  S.activeId = null;
+  renderAll();
+  const cfg = window.GGN_FIREBASE_CONFIG;
+  if (window.FB){
+    if (cfg && cfg.apiKey && cfg.projectId && !/PASTE/i.test(cfg.apiKey + cfg.projectId)) return initFirebase(cfg);
+    S.platform = 'firebase'; S.status = 'noconfig'; renderAll(); return;
+  }
+  const C = window.claude;
+  if (!C || typeof C.use !== 'function'){ S.status = 'nodb'; S.activeId = 'local'; S.local.local = newDoc('local', 'You'); renderAll(); return; }
+  const safe = p => Promise.resolve(p).catch(() => null);
+  const [db, user, sample] = await Promise.all([safe(C.use('db')), safe(C.use('user')), safe(C.use('sample'))]);
+  S.user = user; S.sample = sample;
+  if (user){
+    try { S.uid = await user.id(); } catch {}
+    try { S.isOwner = !!(await user.isOwner()); } catch {}
+    try { const me = await user.me(); S.myName = (me && me.name) || ''; } catch {}
+  }
+  if (sample && typeof sample.limits === 'function'){
+    try { const lim = await sample.limits(); S.imgLimits = (lim && lim.images) || null; } catch { S.imgLimits = null; }
+  }
+  if (!db){ S.status = 'nodb'; S.activeId = 'local'; S.local.local = newDoc('local', 'You'); renderAll(); return; }
+  S.platform = 'claude';
+  S.db = db; S.status = 'loading'; S.activeId = S.uid;
+  renderAll();
+  subscribe();
+}
+window.__ggn = { aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleOffers, acceptInto, promisedSpares, toStore };
+init();
+})();
+</script>
+</body>
+</html>

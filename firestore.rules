@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Got Got Need: who can read and change what.
+// - Anyone signed in (Google or "just this phone") can read everyone's card lists, so swaps can be matched.
+// - Each person can only change their own list (players/<their user id>).
+// - The admin (the first person to sign in with Google) can also keep lists for people
+//   who don't use the app ("managed" lists) and tidy anyone's list.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function withGoogle() { return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+    function adminDoc() { return /databases/$(database)/documents/config/admin; }
+    function isAdmin() { return signedIn() && exists(adminDoc()) && get(adminDoc()).data.uid == request.auth.uid; }
+
+    function validPlayer(d) {
+      return d.keys().hasOnly(['v', 'adult', 'child', 'nick', 'counts', 'complete', 'scope', 'other', 'managed', 'updatedAt', 'offers', 'replies'])
+        && d.adult is string && d.adult.size() > 0 && d.adult.size() <= 24
+        && d.child is string && d.child.size() <= 24
+        && d.nick is string && d.nick.size() <= 24
+        && d.counts is map && d.counts.size() <= 760
+        && d.complete is bool
+        && d.scope is list && d.scope.size() <= 30
+        && d.other is string && d.other.size() <= 400
+        && d.managed is bool
+        && d.updatedAt is number
+        && d.offers is list && d.offers.size() <= 60
+        && d.replies is map && d.replies.size() <= 80;
+    }
+
+    // The first person to sign in with Google becomes the admin. Nobody can change it afterwards
+    // (to reset it, delete this document in the Firebase console).
+    match /config/admin {
+      allow read: if signedIn();
+      allow create: if withGoogle()
+        && request.resource.data.keys().hasOnly(['uid', 'at'])
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /players/{pid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && validPlayer(request.resource.data)
+        && (pid == request.auth.uid || isAdmin())
+        && (request.resource.data.managed == false || isAdmin());
+      allow delete: if signedIn() && (pid == request.auth.uid || isAdmin());
+    }
+  }
+}
