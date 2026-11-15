@@ -115,7 +115,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .mode[aria-pressed="true"][data-mode="remove"]{background:var(--ink);color:var(--surface)}
 .padtop{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
 .padtop select{min-height:40px;max-width:150px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-weight:700;font-size:14px}
-.readout{display:flex;align-items:baseline;gap:10px;min-height:52px;padding:6px 12px;border-radius:8px;background:var(--paper);overflow:hidden}
+.readout{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 12px;border-radius:8px;background:var(--paper);overflow:hidden}
 .readout b{font:800 32px/1 var(--display);font-variant-numeric:tabular-nums;min-width:2ch}
 .readout span{font-size:14px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .readout.ok span{color:var(--ink);font-weight:700}
@@ -165,6 +165,37 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .stack{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:14px}
 .stack small{margin:-2px 0 8px;text-align:center}
 .linkbox{display:block;margin:8px 0;padding:10px 12px;border-radius:8px;background:var(--paper);font-weight:700;word-break:break-all}
+.cart{--w:64px;position:relative;flex:none;display:block;width:var(--w);height:calc(var(--w)*1.4);border-radius:calc(var(--w)*.09);overflow:hidden;font-size:calc(var(--w)*.1);color:#0F1B34;font-family:var(--body);
+  background:linear-gradient(155deg,var(--a) 0 40%,var(--b) 40% 47%,#F4F6FA 47% 100%);
+  box-shadow:0 1px 3px rgba(0,0,0,.28),inset 0 0 0 calc(var(--w)*.035) rgba(255,255,255,.75)}
+.cart .cn{position:absolute;top:5%;left:8%;font:800 1.9em/1 var(--display);color:var(--onA);font-variant-numeric:tabular-nums;letter-spacing:-.02em;text-shadow:0 1px 2px rgba(0,0,0,.18)}
+.cart .ci{position:absolute;top:23%;left:50%;width:50%;height:calc(var(--w)*.5);transform:translateX(-50%);border-radius:50%;background:#fff;box-shadow:0 0 0 calc(var(--w)*.03) var(--b),0 2px 6px rgba(0,0,0,.22);display:grid;place-items:center;font:800 1.9em/1 var(--display);color:var(--ink)}
+.cart .cm{position:absolute;left:0;right:0;bottom:6%;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 6%;line-height:1.1}
+.cart .cm b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:800 1.3em/1.1 var(--display)}
+.cart .cm i,.cart .cm em{font-style:normal;color:#5A6580;white-space:nowrap}
+.cart .cm i{font-size:.95em}
+.cart .cm em{font-size:.8em;margin-top:.15em}
+.cart.ins{background:linear-gradient(155deg,var(--a) 0 40%,var(--b) 40% 47%,transparent 47%),conic-gradient(from 200deg at 60% 72%,#F3E7B5,#FFFBF0,#D9C27A,#FFF4CF,#E8D9A0,#F3E7B5)}
+.cart.ins::after{content:"";position:absolute;inset:0;z-index:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.6) 48%,transparent 66%)}
+.cart .cn,.cart .ci,.cart .cm{z-index:1}
+.cart.rare{box-shadow:0 1px 3px rgba(0,0,0,.28),inset 0 0 0 calc(var(--w)*.05) #E9AE1C}
+.cart.xs{--w:30px}.cart.xs .ci,.cart.xs .cm{display:none}.cart.xs .cn{font-size:1.5em;top:auto;bottom:10%;left:0;right:0;text-align:center;color:#0F1B34;text-shadow:none}
+.cart.s{--w:60px}.cart.s .cm i,.cart.s .cm em{display:none}.cart.s .cm b{font-size:1.5em}
+.cart.m{--w:88px}.cart.m .cm em{display:none}
+.cart.l{--w:170px}
+.cardrow{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x proximity}
+.cardrow .cart{scroll-snap-align:start}
+.artwrap{display:flex;justify-content:center;margin:6px 0 12px}
+.scanlist label .cart{margin-right:2px}
+.swoosh{position:fixed;inset:0;z-index:80;background:rgba(8,14,30,.55);overflow:hidden;cursor:pointer}
+.swoosh .sw-p{position:absolute;top:50%;display:flex;flex-direction:column;align-items:center;gap:6px;transform:translate(-50%,-50%);color:#fff;font-weight:700;font-size:14px}
+.swoosh .sw-av{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:#1E4FD8;box-shadow:0 0 0 4px rgba(255,255,255,.85);font:800 26px/1 var(--display);color:#fff}
+.swoosh .sw-p.r .sw-av{background:#E9AE1C;color:#241A00}
+.swoosh svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.swoosh path{fill:none;stroke-width:5;stroke-linecap:round;opacity:.9}
+.swoosh .fly{position:absolute;left:0;top:0;will-change:transform,opacity}
+.swoosh .sw-done{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%) scale(0);padding:12px 22px;border-radius:14px;background:#fff;color:#0F1B34;font:800 30px/1 var(--display);text-transform:uppercase;letter-spacing:.02em;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.swoosh .dot{position:absolute;left:50%;top:50%;width:10px;height:10px;border-radius:3px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
 .legend i{display:inline-block;width:12px;height:12px;margin-right:5px;border-radius:3px;vertical-align:-2px;border:1px solid var(--line);background:var(--surface)}
 .legend i.got{background:var(--accent);border-color:var(--accent)}
@@ -299,7 +330,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
           <div class="padtop">
             <label class="sr" for="padSet">Card set</label>
             <select id="padSet"></select>
-            <div class="readout" id="readout" aria-live="polite"><b id="padNum">–</b><span id="padName">Number 1–300</span></div>
+            <div class="readout" id="readout" aria-live="polite"><span id="padArt"></span><b id="padNum">–</b><span id="padName">Number 1–300</span></div>
           </div>
           <div class="keypad" id="keypad">
             <button type="button" class="key" data-k="1">1</button>
@@ -1332,7 +1363,7 @@ function settleSent(d, lookup){
     } else if (isAgreed(r) && r.done){
       const gave = (r.done.got || []).filter(id => o.give.includes(id)), got = (r.done.gave || []).filter(id => o.get.includes(id));
       applyHandover(d, gave, got); o.st = 'done'; o.done = { gave, got, at: Date.now() };
-      notes.push({ kind: 'done', nick, id: o.id });
+      notes.push({ kind: 'done', nick, id: o.id, gave, got });
     }
   }
   return notes;
@@ -1354,7 +1385,7 @@ function settleReceived(d, myId, players){
     } else if (o.st === 'done' && o.done){
       const gave = (o.done.got || []).filter(id => o.get.includes(id)), got = (o.done.gave || []).filter(id => o.give.includes(id));
       applyHandover(d, gave, got); r.done = { gave, got, at: Date.now() };
-      notes.push({ kind: 'done', nick: sender.nick, id: oid });
+      notes.push({ kind: 'done', nick: sender.nick, id: oid, gave, got });
     }
   }
   return notes;
@@ -1617,6 +1648,8 @@ function runSettle(){
   }
   if (!notes.length) return;
   renderAll();
+  const mine = notes.find(n => n.kind === 'done' && n.pid === S.activeId && n.gave);
+  if (mine) celebrate(mine.gave, mine.got, mine.nick, (activeDoc() || {}).nick);
   if (notes.length > 1) toast(`${notes.length} swaps updated. Check the Swaps tab.`);
   else {
     const n = notes[0];
@@ -1689,6 +1722,129 @@ function needJoin(){
   if (S.readOnly){ toast("You can look but can't add cards yet"); return; }
   if (!S.db || !S.uid){ toast('Sign in to Claude to save your cards'); return; }
   openJoin();
+}
+
+/* ===================== Card pictures (original design: club colours, number, initials) ===================== */
+const KIT = { ARS:['#C8102E','#FFFFFF'], AVL:['#7A263A','#95BFE5'], BOU:['#B50E12','#111111'], BRE:['#D20000','#FFFFFF'], BHA:['#0057B8','#FFFFFF'],
+  CHE:['#034694','#FFFFFF'], CRY:['#1B458F','#C4122E'], EVE:['#003399','#FFFFFF'], FUL:['#FFFFFF','#111111'], LEE:['#FFFFFF','#1D428A'],
+  LIV:['#C8102E','#F6EB61'], MCI:['#6CABDD','#1C2C5B'], MUN:['#DA291C','#111111'], NEW:['#241F20','#FFFFFF'], NFO:['#DD0000','#FFFFFF'],
+  SUN:['#EB172B','#FFFFFF'], TOT:['#FFFFFF','#132257'], COV:['#3E9DD6','#FFFFFF'], IPS:['#3A64A3','#FFFFFF'], HUL:['#F5A12D','#111111'] };
+function lum(hex){
+  const n = parseInt(hex.slice(1), 16), ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+  return .2126 * ch[0] + .7152 * ch[1] + .0722 * ch[2];
+}
+function kit(c){
+  const [a, b] = KIT[c.club] || ['#1E4FD8', '#FFFFFF'];
+  return { a, b, ink: lum(a) < lum(b) ? a : b, onA: lum(a) > .45 ? '#0F1B34' : '#FFFFFF' };
+}
+function initials(name){
+  const w = name.replace(/\s+\d{4}\/\d{2}$/, '').split(/\s+/).filter(Boolean);
+  return ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+}
+function cardArt(c, size){
+  const k = kit(c);
+  const setName = c.set === 'base' ? (c.fs ? 'Future Stars' : 'Base set') : SET_BY_CODE[c.set].name;
+  return `<span class="cart ${size}${c.set !== 'base' ? ' ins' : ''}${c.rare ? ' rare' : ''}" style="--a:${k.a};--b:${k.b};--ink:${k.ink};--onA:${k.onA}" aria-hidden="true">`
+    + `<span class="cn">${c.id}</span><span class="ci">${esc(initials(c.name))}</span>`
+    + `<span class="cm"><b>${esc(c.short)}</b><i>${esc(CLUBS[c.club][1])}</i><em>${esc(setName)}${c.rc ? ' · RC' : ''}${c.rare ? ' ★' : ''}</em></span></span>`;
+}
+function cardRow(ids){
+  if (!ids.length) return '<small class="muted">Nothing</small>';
+  return `<div class="cardrow" role="list">${ids.map(id => { const c = BY_ID.get(id); return `<span role="listitem" title="${esc(`${c.id} ${c.name}`)}">${cardArt(c, 's')}<span class="sr">${esc(`${c.id} ${c.name}`)}</span></span>`; }).join('')}</div>`;
+}
+
+/* ===================== Swoosh (sound is generated, can be switched off in Settings) ===================== */
+let AC = null;
+const soundOn = () => store.get('sound') !== 'off';
+function audio(){
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  } catch { return null; }
+}
+function whoosh(delay, rising){
+  const ac = AC; if (!ac || ac.state !== 'running' || !soundOn()) return;
+  const t0 = ac.currentTime + delay, dur = .55;
+  const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
+  const data = buf.getChannelData(0); for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
+  bp.frequency.setValueAtTime(rising ? 380 : 2600, t0); bp.frequency.exponentialRampToValueAtTime(rising ? 2600 : 420, t0 + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(.3, t0 + dur * .45); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+  src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(t0); src.stop(t0 + dur);
+}
+function chime(delay){
+  const ac = AC; if (!ac || ac.state !== 'running' || !soundOn()) return;
+  [659.25, 987.77, 1318.5].forEach((f, i) => {
+    const t0 = ac.currentTime + delay + i * .08;
+    const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+    const g = ac.createGain(); g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(.16, t0 + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + .55);
+    o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + .6);
+  });
+}
+function celebrate(gave, got, otherName, myName){
+  if (!document.body || (!gave.length && !got.length)) return;
+  const old = document.querySelector('.swoosh'); if (old) old.remove();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const W = innerWidth, H = innerHeight, y = H * .52, xL = W * .2, xR = W * .8;
+  const layer = document.createElement('div');
+  layer.className = 'swoosh';
+  layer.setAttribute('role', 'status');
+  layer.setAttribute('aria-label', `Swapped with ${otherName}`);
+  const ini = n => esc(String(n || '?').trim().charAt(0).toUpperCase() || '?');
+  layer.innerHTML = `<svg viewBox="0 0 ${W} ${H}"><path d="M${xL} ${y - 40} Q${W / 2} ${y - H * .34} ${xR} ${y - 40}" stroke="#E9AE1C"/><path d="M${xR} ${y + 40} Q${W / 2} ${y + H * .3} ${xL} ${y + 40}" stroke="#7C9BFF"/></svg>
+    <div class="sw-p l" style="left:${xL}px"><span class="sw-av">${ini(myName)}</span><span>You</span></div>
+    <div class="sw-p r" style="left:${xR}px"><span class="sw-av">${ini(otherName)}</span><span>${esc(otherName)}</span></div>
+    <div class="sw-done">Swapped!</div>`;
+  document.body.appendChild(layer);
+  let gone = false;
+  const close = () => { if (gone) return; gone = true; layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).onfinish = () => layer.remove(); };
+  layer.addEventListener('click', close);
+  const done = layer.querySelector('.sw-done');
+  if (reduce){
+    done.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 200, fill: 'forwards' });
+    setTimeout(close, 1400);
+    return;
+  }
+  layer.querySelectorAll('path').forEach((p, i) => {
+    const len = p.getTotalLength();
+    p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+    p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }, { strokeDashoffset: -len }], { duration: 1100, delay: i * 260, easing: 'ease-in-out', fill: 'forwards' });
+  });
+  const fly = (ids, from, to, up, delay0) => ids.slice(0, 6).forEach((id, i) => {
+    const el = document.createElement('div');
+    el.className = 'fly';
+    el.innerHTML = cardArt(BY_ID.get(id), 'm');
+    layer.appendChild(el);
+    const pts = [], cx = W / 2, cy = up ? y - H * .36 : y + H * .32;
+    for (let k = 0; k <= 8; k++){
+      const t = k / 8, x = (1 - t) * (1 - t) * from + 2 * (1 - t) * t * cx + t * t * to, yy = (1 - t) * (1 - t) * y + 2 * (1 - t) * t * cy + t * t * y;
+      pts.push({ transform: `translate(${x - 44}px,${yy - 62}px) rotate(${(up ? -14 : 14) * (1 - 2 * t)}deg) scale(${.55 + Math.sin(Math.PI * t) * .6})`, opacity: k === 0 ? 0 : k === 8 ? 0 : 1 });
+    }
+    el.style.opacity = '0';
+    el.animate(pts, { duration: 950, delay: delay0 + i * 110, easing: 'cubic-bezier(.45,.05,.4,1)', fill: 'forwards' });
+  });
+  fly(gave, xL, xR, true, 0);
+  fly(got, xR, xL, false, 300);
+  if (gave.length > 6 || got.length > 6){
+    const more = document.createElement('div'); more.className = 'sw-p'; more.style.left = '50%'; more.style.top = '88%';
+    more.textContent = `+${Math.max(gave.length - 6, 0) + Math.max(got.length - 6, 0)} more`; layer.appendChild(more);
+  }
+  whoosh(0, true); whoosh(.3, false); chime(1.15);
+  const endAt = 950 + 300 + Math.max(Math.min(gave.length, 6), Math.min(got.length, 6)) * 110;
+  setTimeout(() => {
+    if (gone) return;
+    done.animate([{ transform: 'translate(-50%,-50%) scale(0)' }, { transform: 'translate(-50%,-50%) scale(1.15)' }, { transform: 'translate(-50%,-50%) scale(1)' }], { duration: 420, easing: 'ease-out', fill: 'forwards' });
+    const colours = ['#E9AE1C', '#7C9BFF', '#FFFFFF', '#4CC38A', '#FF6B6B'];
+    for (let i = 0; i < 18; i++){
+      const d = document.createElement('span'); d.className = 'dot'; d.style.background = colours[i % colours.length]; layer.appendChild(d);
+      const ang = (i / 18) * Math.PI * 2 + Math.random() * .3, dist = 90 + Math.random() * 90;
+      d.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${Math.cos(ang) * dist}px), calc(-50% + ${Math.sin(ang) * dist}px)) rotate(${Math.random() * 360}deg) scale(.6)`, opacity: 0 }], { duration: 900, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'forwards' });
+    }
+    if (navigator.vibrate) try { navigator.vibrate([18, 70, 28]); } catch {}
+  }, endAt);
+  setTimeout(close, endAt + 1500);
 }
 
 /* ===================== Rendering ===================== */
@@ -1870,6 +2026,7 @@ function renderPad(){
     $('#padName').textContent = `Number ${s}`;
   }
   $('#padGo').disabled = !c;
+  $('#padArt').innerHTML = c ? cardArt(c, 'xs') : '';
 }
 function padPress(k){
   if (k === 'back'){ S.padBuf = S.padBuf.slice(0, -1); renderPad(); return; }
@@ -2073,8 +2230,8 @@ function toSwapHTML(list){
   return `<div class="panel todo" id="toSwapPanel"><div class="row between wrap"><h2>To swap · ${list.length}</h2><button type="button" class="btn small" id="copyToSwap">Copy list</button></div>
     <p class="help" style="margin-top:4px">Agreed swaps. Take these cards along, then tap <b>We've swapped</b> so your cards update.</p>
     ${list.map(x => `<div class="offer"><p style="margin:0"><b>${esc(x.other ? x.other.full : 'Someone')}</b> <small class="muted">· agreed ${esc(ago(x.at).replace('updated ', ''))}</small></p>
-      <h4>You get · ${x.get.length}</h4>${idChips(x.get, 'get')}
-      <h4>You give · ${x.give.length}</h4>${idChips(x.give, 'give')}
+      <h4>You get · ${x.get.length}</h4>${cardRow(x.get)}
+      <h4>You give · ${x.give.length}</h4>${cardRow(x.give)}
       <div class="actions"><button type="button" class="btn small gold" data-handover="${esc(x.id)}">We've swapped</button><button type="button" class="btn small" data-calloff="${esc(x.id)}">Call off</button></div></div>`).join('')}</div>`;
 }
 function toSwapText(list){
@@ -2091,8 +2248,8 @@ function incomingHTML(me, inc){
   return `<div class="panel inbox"><h2>Offers for you · ${inc.length}</h2>${inc.map(({ from, o }) => {
     const w = offerWarnings(me, o);
     return `<div class="offer"><p style="margin:0"><b>${esc(from.full)}</b> wants to swap <small class="muted">· ${esc(ago(o.at).replace('updated ', ''))}</small></p>
-      <h4>You get · ${o.give.length}</h4>${idChips(o.give, 'get')}
-      <h4>You give · ${o.get.length}</h4>${idChips(o.get, 'give')}
+      <h4>You get · ${o.give.length}</h4>${cardRow(o.give)}
+      <h4>You give · ${o.get.length}</h4>${cardRow(o.get)}
       ${w.length ? `<p class="flag">Check first: ${esc(w.join('; '))}</p>` : ''}
       <div class="actions"><button type="button" class="btn small gold" data-accept="${esc(from.id)}" data-oid="${esc(o.id)}">Accept swap</button><button type="button" class="btn small" data-decline="${esc(from.id)}" data-oid="${esc(o.id)}">Decline</button></div>
       <p class="help">Accepting puts it on both your To swap lists. No cards change until you've swapped.</p></div>`;
@@ -2246,7 +2403,8 @@ function openCardEditor(id){
   S.editing = id;
   const start = cnt(activeDoc(), id);
   const setName = c.set === 'base' ? (c.fs ? 'Base set · Future Stars' : 'Base set') : SET_BY_CODE[c.set].name;
-  openSheet(`<h2 id="sheetTitle">${c.id} · ${esc(c.name)}</h2>
+  openSheet(`<div class="artwrap">${cardArt(c, 'l')}</div>
+    <h2 id="sheetTitle">${c.id} · ${esc(c.name)}</h2>
     <p class="meta">${esc(CLUBS[c.club][0])} · ${esc(setName)}${c.rare ? ' · ★' : ''}</p>
     <p style="margin-top:14px"><b>How many have you got?</b></p>
     <div class="stepper"><button type="button" class="key" id="edMinus" aria-label="One fewer">−</button><output id="edCount" aria-live="polite"></output><button type="button" class="key" id="edPlus" aria-label="One more">+</button></div>
@@ -2287,6 +2445,7 @@ function openSettings(){
     <div class="setchips">${setChips}</div>
     <label class="f" for="setOther">Other swaps (parallels, autographs, numbered cards)</label>
     <textarea id="setOther" rows="3" maxlength="400" placeholder="e.g. Palmer green /99, Saka PL parallel" ${editable ? '' : 'disabled'}>${esc(d.other || '')}</textarea>
+    <label class="toggle" style="border-top:0;padding-top:0"><input type="checkbox" id="setSound" ${soundOn() ? 'checked' : ''}><span><b>Swoosh sound</b><br><small class="muted">Plays when cards are swapped. This phone only.</small></span></label>
     <div class="sheet-actions"><button type="button" class="btn primary" id="setSave" ${editable ? '' : 'disabled'}>Save settings</button></div>
     <div class="sheet-actions">
       <button type="button" class="btn small danger" id="clearAll" ${editable ? '' : 'disabled'}>Clear all cards</button>
@@ -2308,6 +2467,7 @@ function openSettings(){
         }
         S.fb.F.signOut(S.fb.auth).then(() => closeSheet()).catch(() => toast("Couldn't sign out"));
       });
+      root.querySelector('#setSound').addEventListener('change', e => { store.set('sound', e.target.checked ? 'on' : 'off'); if (e.target.checked){ audio(); setTimeout(() => whoosh(0, true), 50); } });
       root.querySelector('#setSave').addEventListener('click', () => {
         const doc = mutable(S.activeId);
         setNames(doc, root.querySelector('#setAdult').value || doc.adult, root.querySelector('#setChild').value);
@@ -2470,7 +2630,7 @@ function findPending(id){ return pendingFor(S.activeId).find(x => x.id === id) |
 function openHandover(id){
   const x = findPending(id);
   if (!x){ toast('That swap has already been updated'); renderAll(); return; }
-  const li = (cid, side) => { const c = BY_ID.get(cid); return `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" checked> <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}</small></label></li>`; };
+  const li = (cid, side) => { const c = BY_ID.get(cid); return `<li><label><input type="checkbox" data-side="${side}" value="${c.id}" checked> ${cardArt(c, 'xs')} <b>${c.id}</b> ${esc(c.name)} <small class="muted">${esc(CLUBS[c.club][1])}</small></label></li>`; };
   const nick = x.other ? x.other.nick : 'they';
   openSheet(`<h2 id="sheetTitle">Swapped with ${esc(x.other ? x.other.full : 'them')}?</h2>
     <p>Untick any card that didn't change hands. Your cards update now, and ${esc(nick)}'s update when their app next opens.</p>
@@ -2479,6 +2639,7 @@ function openHandover(id){
     <div class="sheet-actions"><button type="button" class="btn gold" id="handGo">Update my cards</button></div>`, root => {
       root.querySelector('#handGo').addEventListener('click', async () => {
         const pick = side => [...root.querySelectorAll(`input[data-side="${side}"]:checked`)].map(i => i.value);
+        audio();
         root.querySelector('#handGo').disabled = true;
         await completeSwap(id, pick('got'), pick('gave'));
       });
@@ -2502,6 +2663,7 @@ async function completeSwap(id, got, gave){
   S.undo = null; S.dirty.add(pid);
   const ok = await flush(pid);
   closeSheet(); renderAll();
+  if (ok) celebrate(gave, got, x.other ? x.other.nick : 'Friend', (activeDoc() || {}).nick);
   toast(ok ? `Swap with ${x.other ? x.other.nick : 'them'} done. Your cards are updated.` : "Couldn't save just now. It'll retry.");
 }
 async function callOff(id){
@@ -2547,6 +2709,7 @@ function openDone(fid){
         const gave = [...root.querySelectorAll('input[data-side=give]:checked')].map(i => i.value);
         if (!got.length && !gave.length){ toast('Tick at least one card'); return; }
         if (!canWriteActive()){ needJoin(); return; }
+        audio();
         const doc = mutable(S.activeId);
         const prev = {};
         for (const id of got){ prev[id] = doc.counts[id] || 0; doc.counts[id] = Math.min(99, (doc.counts[id] || 0) + 1); }
@@ -2560,6 +2723,7 @@ function openDone(fid){
           scheduleSave(f.id);
         }
         closeSheet(); renderAll();
+        celebrate(gave, got, f.nick, (activeDoc() || {}).nick);
         toast(`Updated: ${plural(got.length, 'card')} in, ${got.length !== gave.length || gave.length ? plural(gave.length, 'card') + ' out' : ''}`.replace(/, $/, ''), true);
       });
     });
@@ -3009,7 +3173,7 @@ async function init(){
   renderAll();
   subscribe();
 }
-window.__ggn = { aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor };
+window.__ggn = { celebrate, cardArt, aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor };
 init();
 })();
 </script>
