@@ -133,7 +133,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .seg{display:inline-flex;gap:2px;padding:3px;border-radius:9px;background:var(--paper)}
 .seg button{min-height:32px;padding:0 10px;border:0;border-radius:7px;background:none;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer}
 .seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
-.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:12px 0;padding:4px;border-radius:10px;background:var(--paper)}
+.modes{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:12px 0;padding:4px;border-radius:10px;background:var(--paper)}
 .mode{min-height:42px;border:0;border-radius:7px;background:transparent;font-weight:800;font-size:14px;color:var(--muted);cursor:pointer}
 .mode[aria-pressed="true"][data-mode="got"]{background:var(--accent);color:var(--accent-ink)}
 .mode[aria-pressed="true"][data-mode="swap"]{background:var(--gold);color:var(--gold-ink)}
@@ -248,8 +248,10 @@ button.chip.pick:active{transform:scale(.96)}
 .scanlist .pt{margin-left:auto;padding-left:8px;white-space:nowrap;font-weight:700;color:var(--muted);font-size:12px}
 .gifttag{display:inline-block;margin-left:4px}
 .grow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}
-.panel h2 + .grow,.panel h2 + p + .grow{border-top:0}
+.panel h2 + .grow,.panel h2 + p + .grow,.gactions + .grow{border-top:0}
 .grow .t{min-width:0}
+.gactions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px}
+.gactions .btn{min-height:50px;padding:0 10px;font-size:15px;box-shadow:0 2px 8px rgba(15,27,52,.18)}
 
 /* parallels */
 .pdot{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);vertical-align:-1px}
@@ -1018,8 +1020,7 @@ try {
           </div>
         </div>
         <div class="modes" role="group" aria-label="What adding does">
-          <button type="button" class="mode" data-mode="got" aria-pressed="false">Got it</button>
-          <button type="button" class="mode" data-mode="swap" aria-pressed="true">+ Swap</button>
+          <button type="button" class="mode" data-mode="got" aria-pressed="true">Got it</button>
           <button type="button" class="mode" data-mode="remove" aria-pressed="false">Remove</button>
         </div>
 
@@ -2231,7 +2232,7 @@ const store = {
   set(k, v){ try { localStorage.setItem('ggn.' + k, v); } catch {} }
 };
 S.tab = ['cards', 'swaps', 'friends'].includes(store.get('tab')) ? store.get('tab') : 'cards';
-S.mode = ['got', 'swap', 'remove'].includes(store.get('mode')) ? store.get('mode') : 'swap';
+S.mode = store.get('mode') === 'remove' ? 'remove' : 'got';   // Got it counts every copy, so there's no separate swap mode
 S.addMode = ['pad', 'list', 'photo'].includes(store.get('addMode')) ? store.get('addMode')
   : (window.matchMedia && matchMedia('(pointer: coarse)').matches ? 'pad' : 'list');
 
@@ -2325,9 +2326,19 @@ function mutable(id){
   }
   return S.local[id];
 }
+/* Lock: once the organiser locks the swap group, only people they've let in count. The database rules enforce it. */
+function isIn(p){
+  if (!p || p.demo || p.id === 'local' || p.id === S.uid || !S.lockOn) return true;
+  if (p.managed || p.id === S.adminUid) return true;
+  return !!(S.approvedSet && S.approvedSet.has(p.id));
+}
+function waitingPlayers(){
+  if (!S.lockOn || !S.isOwner || !S.approvedSet) return [];
+  return Object.values(S.players).filter(p => !p.managed && p.id !== S.uid && !S.approvedSet.has(p.id)).sort((a, b) => b.updatedAt - a.updatedAt);
+}
 function allPlayers(){
   const ids = new Set([...Object.keys(S.players), ...Object.keys(S.local)]);
-  const list = [...ids].map(getDoc).filter(Boolean);
+  const list = [...ids].map(getDoc).filter(Boolean).filter(isIn);
   if (S.demo) list.push(...S.demoPlayers);
   return list;
 }
@@ -2559,10 +2570,7 @@ function tapCard(id){
   const doc = mutable(S.activeId);
   const b = doc.counts[id] || 0;
   let a = b;
-  if (S.mode === 'got'){
-    if (b === 0) a = 1; else if (b === 1) a = 0;
-    else { toast(`#${id} has swaps. Use Remove to take them off.`); return; }
-  } else if (S.mode === 'swap') a = Math.min(99, Math.max(b, 1) + 1);
+  if (S.mode === 'got') a = Math.min(99, b + 1);   // first copy goes in your collection, the rest are swaps
   else a = Math.max(0, b - 1);
   if (a === b){ toast(`#${id} is already a need`); return; }
   if (a > 0) doc.counts[id] = a; else delete doc.counts[id];
@@ -2780,6 +2788,11 @@ function renderNotice(){
     html = "Can't reach the swap list yet. Check your connection; it updates by itself."; bad = true;
   } else if (S.saveFailed){
     html = 'Your last change has not saved yet. <button type="button" class="btn small" id="retrySave">Try again</button>'; bad = true;
+  } else if (S.waiting){
+    html = "<b>Waiting to get in.</b> The organiser lets new people in. Add your cards meanwhile.";
+  } else if (S.tab !== 'friends' && waitingPlayers().length){
+    const n = waitingPlayers().length;
+    html = `<b>${esc(n === 1 ? `${waitingPlayers()[0].nick} is waiting to get in.` : `${n} people are waiting to get in.`)}</b> <button type="button" class="btn small gold" id="noticeWaiting">See</button>`;
   } else if (S.tab !== 'swaps' && activeDoc() && incomingFor(S.activeId).length){
     const inc = incomingFor(S.activeId);
     const one = inc[0], k1 = inc.length === 1 ? (one.o.re ? 'changed' : requestKind(one.o)) : '';
@@ -2855,7 +2868,7 @@ function visibleCards(){
 function renderGrid(){
   const d = activeDoc() || EMPTY;
   const list = visibleCards();
-  const verb = S.mode === 'got' ? 'Tap a card to tick it off as got' : S.mode === 'swap' ? 'Tap a card to add a swap' : 'Tap a card to take one copy off';
+  const verb = S.mode === 'got' ? 'Tap a card to add one (the first is got, more are swaps)' : 'Tap a card to take one copy off';
   const needs = list.filter(c => cnt(d, c.id) === 0);
   let hint = `<span>${plural(list.length, 'card')} · ${verb}. Hold a card to change its count.</span>`;
   if (S.mode === 'got' && needs.length > 1 && canWriteActive()) hint += `<button type="button" class="linkbtn" id="tickAll">Tick all ${needs.length} shown as got</button>`;
@@ -2876,10 +2889,10 @@ function updateTile(id, focus){
 function renderModes(){
   document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode)));
   const go = $('#padGo');
-  go.classList.toggle('swap', S.mode === 'swap');
+  go.classList.remove('swap');
   go.classList.toggle('remove', S.mode === 'remove');
-  go.textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove';
-  $('#entryBtn').textContent = S.mode === 'got' ? 'Add' : S.mode === 'swap' ? 'Add swaps' : 'Remove';
+  go.textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : S.mode === 'got' ? 'Got it' : 'Remove';
+  $('#entryBtn').textContent = S.mode === 'got' ? 'Add' : 'Remove';
 }
 function renderAddMode(){
   document.querySelectorAll('[data-am]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.am === S.addMode)));
@@ -2904,7 +2917,7 @@ function renderPad(){
   pb.setAttribute('aria-pressed', String(!!S.padPar));
   pt.hidden = !S.padPar;
   if (pt.value !== par.code) pt.value = par.code;
-  $('#padGo').textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : (S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove');
+  $('#padGo').textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : (S.mode === 'got' ? 'Got it' : 'Remove');
   if (c && S.padPar){
     const n = cnt(activeDoc() || EMPTY, parKey(c.id, par.code));
     $('#padName').textContent = `✦ ${par.short} · ${c.name}${n ? ` · you have ${n}` : ''}`;
@@ -2954,7 +2967,8 @@ function renderPreview(){
   const { items, bad } = parseEntry(val);
   $('#entryBtn').disabled = !items.length;
   if (!val.trim()){ $('#preview').innerHTML = ''; return; }
-  const shown = items.slice(0, 40).map(it => itemChip(it, S.mode === 'swap' ? 'give' : 'get')).join('');
+  const d0 = activeDoc() || EMPTY;
+  const shown = items.slice(0, 40).map(it => itemChip(it, S.mode === 'got' && !String(it.id).includes('~') && cnt(d0, it.id) > 0 ? 'give' : 'get')).join('');
   const more = items.length > 40 ? `<span class="chip">+${items.length - 40} more</span>` : '';
   const badHtml = bad.length ? `<p class="flag">Not recognised: ${esc(bad.slice(0, 12).join(', '))}${bad.length > 12 ? '…' : ''}</p>` : '';
   $('#preview').innerHTML = `${items.length ? `<small class="muted">${plural(items.length, 'card')} ready</small><div class="chips">${shown}${more}</div>` : ''}${badHtml}`;
@@ -3054,7 +3068,10 @@ function renderBadges(){
   badge.textContent = inc ? String(inc) : pend ? String(pend) : live ? String(live) : '';
   badge.classList.toggle('alert', inc > 0);
   badge.title = inc ? `${plural(inc, 'swap request')} waiting` : pend ? `${plural(pend, 'swap')} to hand over` : live ? `${plural(live, 'friend')} to swap with` : '';
-  $('#friendsCount').textContent = friends.filter(p => !p.demo).length ? String(friends.filter(p => !p.demo).length) : '';
+  const waitN = waitingPlayers().length;
+  $('#friendsCount').textContent = waitN ? String(waitN) : friends.filter(p => !p.demo).length ? String(friends.filter(p => !p.demo).length) : '';
+  $('#friendsCount').classList.toggle('alert', waitN > 0);
+  $('#friendsCount').title = waitN ? `${plural(waitN, 'person', 'people')} waiting to get in` : '';
 }
 function renderTabs(){
   for (const t of ['cards', 'swaps', 'friends']){
@@ -3081,8 +3098,12 @@ function chipList(cards, cls, key, limit = 18, ask){
   if (cards.length > limit) html += `<p class="help"><button type="button" class="linkbtn" data-expand="${esc(key)}">${open ? 'Show fewer' : `Show all ${cards.length}`}</button></p>`;
   return html;
 }
+function waitingHTML(){
+  return `<div class="panel empty"><h2>Waiting to get in</h2><p>This swap group is locked, so the organiser lets each new person in. They'll see your name.</p><p>Add your cards on <b>My cards</b> while you wait. As soon as you're let in, your friends and swaps show up here.</p></div>`;
+}
 function renderSwaps(){
   const el = $('#view-swaps');
+  if (S.waiting){ el.innerHTML = waitingHTML(); return; }
   const me = activeDoc();
   if (!me){
     const canJoin = (S.db && S.uid && !S.readOnly) || (isWeb() && !S.uid && S.status !== 'noconfig');
@@ -3212,10 +3233,10 @@ function outgoingHTML(outg){
 }
 function groupsPanelHTML(mine){
   const gs = mine.groups || [];
-  let h = `<div class="panel" id="groupsPanel"><h2>${gs.length > 1 ? 'Your groups' : gs.length ? 'Your group' : 'Swap groups'}</h2>`;
+  let h = `<div class="panel" id="groupsPanel"><h2>${gs.length > 1 ? 'Your groups' : gs.length ? 'Your group' : 'Swap groups'}</h2>
+    <div class="gactions"><button type="button" class="btn primary" id="gNew">＋ ${gs.length ? 'New group' : 'Start a group'}</button><button type="button" class="btn gold" id="gJoin">Join with a code</button></div>`;
   if (!gs.length) h += `<p>You're in the open group: everyone who hasn't joined a group sees each other. Start a group for your friends and share its link, so you only see each other.</p>`;
-  else h += gs.map(g => `<div class="grow"><div class="t"><b>${esc(g.name)}</b><br><small class="muted">${plural(groupMembers(g.id).length, 'person', 'people')} · code <b>${esc(g.id)}</b></small></div><div class="row wrap"><button type="button" class="btn small primary" data-ginvite="${esc(g.id)}">Copy invite</button><button type="button" class="btn small ghost" data-gleave="${esc(g.id)}">Leave</button></div></div>`).join('');
-  h += `<div class="sheet-actions"><button type="button" class="btn small${gs.length ? '' : ' primary'}" id="gNew">${gs.length ? 'Start another group' : 'Start a group'}</button><button type="button" class="btn small" id="gJoin">Join with a code</button></div>`;
+  else h += gs.map(g => `<div class="grow"><div class="t"><b>${esc(g.name)}</b><br><small class="muted">${plural(groupMembers(g.id).length, 'person', 'people')} · code <b>${esc(g.id)}</b></small></div><div class="row wrap"><button type="button" class="btn small" data-ginvite="${esc(g.id)}">Copy invite</button><button type="button" class="btn small ghost" data-gleave="${esc(g.id)}">Leave</button></div></div>`).join('');
   if (gs.length) h += `<p class="help">Only people in your group${gs.length > 1 ? 's' : ''} show up in Friends and Swaps.</p>`;
   return h + '</div>';
 }
@@ -3229,13 +3250,15 @@ function renderFriends(){
   const me0 = activeDoc(), mine = getDoc(S.uid);
   const players = (me0 ? [me0].concat(friendsOf(S.activeId)) : allPlayers()).sort((a, b) => (a.id === S.uid ? -1 : b.id === S.uid ? 1 : 0) || (b.updatedAt - a.updatedAt));
   let html = '';
+  if (S.waiting){ el.innerHTML = waitingHTML(); return; }
+  if (isWeb() && S.isOwner && mine){ html += lockPanelHTML(); prefetchRules(); }
   if (isWeb() && mine) html += groupsPanelHTML(mine);
   if (S.isOwner && isWeb() && mine && groupIds(mine).length){
     html += `<div class="panel"><h2>Lists you keep</h2><p class="help" style="margin-top:0">Keep a list for someone who doesn't use the app. Lists you keep are in your groups too.</p><div class="sheet-actions"><button type="button" class="btn small" id="addManaged">Keep a list for someone</button></div></div>`;
   } else if (S.isOwner && isWeb()){
     const link = location.origin + location.pathname;
     html += `<div class="panel"><h2>Invite friends</h2>
-      <p>Send this link in your WhatsApp group:</p><span class="linkbox">${esc(link)}</span>
+      <p>Send this link in your WhatsApp group:${S.lockOn ? ' new people wait until you let them in.' : ''}</p><span class="linkbox">${esc(link)}</span>
       <div class="sheet-actions"><button type="button" class="btn small primary" id="copyInvite">Copy link</button><button type="button" class="btn small" id="addManaged">Keep a list for someone</button></div>
       <p class="help">Friends tap the link, choose <b>Continue with Google</b> (their list follows them to any phone) or <b>Just use this phone</b>, then add their names and cards.</p></div>`;
   } else if (S.isOwner){
@@ -3548,6 +3571,46 @@ function switchProfile(id){
   closeSheet(); renderAll();
   toast(`Now editing ${getDoc(id).nick}'s cards`);
 }
+async function setLock(on){
+  try {
+    if (on) for (const p of Object.values(S.players)) if (!p.managed && !p.demo && p.id !== S.uid) await S.db.doc('approved/' + p.id).set({ at: Date.now(), by: S.uid });
+    await S.db.doc('config/lock').set({ on, at: Date.now() });
+    toast(on ? 'Locked. New people wait until you let them in.' : 'Unlocked. Anyone with the link can join.');
+  } catch { lockErr(); }
+}
+async function letIn(uid){
+  try { await S.db.doc('approved/' + uid).set({ at: Date.now(), by: S.uid }); toast(`${(S.players[uid] || {}).nick || 'They'} can see the swap group now`); }
+  catch { lockErr(); }
+}
+async function removePerson(uid){
+  const nick = (S.players[uid] || {}).nick || 'They';
+  try { await S.db.doc('approved/' + uid).delete(); } catch {}
+  try { await S.db.doc('players/' + uid).delete(); delete S.players[uid]; delete S.local[uid]; }
+  catch { toast("Couldn't remove them just now"); return; }
+  closeSheet(); renderAll(); toast(`${nick} has been removed`);
+}
+function lockErr(){
+  const t = 'The database said no. Paste the new rules into Firebase first (Firestore Database, then Rules, then Publish), then try again.';
+  const m = $('#lockErr'); if (m){ m.hidden = false; m.textContent = t; const h = $('#rulesHelp'); if (h) h.hidden = false; } else toast(t);
+}
+let RULES_TEXT = '';
+function prefetchRules(){ if (!RULES_TEXT) fetch('firestore.rules', { cache: 'no-cache' }).then(r => r.ok ? r.text() : '').then(t => { RULES_TEXT = t || ''; }).catch(() => {}); }
+function rulesHelpHTML(){
+  const pid = String((window.GGN_FIREBASE_CONFIG || {}).projectId || '');
+  return `<div id="rulesHelp" hidden><ol class="steps"><li><button type="button" class="btn small" id="copyRules">Copy the new rules</button></li>
+    <li>Open ${pid ? `<a href="https://console.firebase.google.com/project/${esc(encodeURIComponent(pid))}/firestore/rules" target="_blank" rel="noopener">your Firebase rules</a>` : 'the Firebase console, then Firestore Database, then Rules'}.</li>
+    <li>Select everything there, paste, and tap <b>Publish</b>. Then lock again here.</li></ol></div>`;
+}
+function lockPanelHTML(){
+  if (!S.lockOn) return `<div class="panel" id="lockPanel"><h2>Who can get in</h2>
+    <p>Right now anyone with the link can join. Lock the swap group so new people wait until you let them in. Everyone already here stays in.</p>
+    <div class="sheet-actions"><button type="button" class="btn small primary" id="lockOn">🔒 Lock the swap group</button></div><p class="flag" id="lockErr" hidden></p>${rulesHelpHTML()}</div>`;
+  const w = waitingPlayers();
+  return `<div class="panel${w.length ? ' inbox' : ''}" id="lockPanel"><h2>🔒 Locked${w.length ? ` · ${w.length} waiting` : ''}</h2>
+    <p class="help" style="margin-top:2px">New people wait here until you let them in. They can't see anyone, and nobody sees them.</p>
+    ${w.map(p => { const st = stats(p); return `<div class="grow"><div class="t"><b>${esc(p.full)}</b><br><small class="muted">${plural(st.base + st.ins, 'card')} · ${esc(ago(p.updatedAt))}${p.groups && p.groups.length ? ' · wants ' + esc(p.groups.map(g => g.name).join(', ')) : ''}</small></div><div class="row wrap"><button type="button" class="btn small primary" data-letin="${esc(p.id)}">Let in</button><button type="button" class="btn small ghost" data-remove="${esc(p.id)}">Remove</button></div></div>`; }).join('')}
+    <div class="sheet-actions"><button type="button" class="btn small" id="lockOff">Unlock</button></div><p class="flag" id="lockErr" hidden></p></div>`;
+}
 function openNewGroup(){
   if (!S.uid || !getDoc(S.uid)){ needJoin(); return; }
   openSheet(`<h2 id="sheetTitle">Start a swap group</h2>
@@ -3628,7 +3691,8 @@ function openFriend(id){
   const needChips = !p.complete ? `<small class="muted">${esc(p.nick)} hasn't switched on their needs.</small>`
     : needs.length ? `<div class="chips">${needs.slice(0, 120).map(c => canAsk && cnt(me, c.id) > 1 ? pickChip(c, 'give hit', p.id, 'give') : cardChip(c, me && cnt(me, c.id) > 1 ? 'give hit' : '')).join('')}${needs.length > 120 ? `<span class="chip">+${needs.length - 120} more</span>` : ''}</div>` : '<small class="muted">Needs nothing. Set complete!</small>';
   const st = stats(p);
-  const ownerTools = S.isOwner && p.managed ? `<div class="sheet-actions"><button type="button" class="btn small primary" id="fEdit">Edit their cards</button></div>` : '';
+  const ownerTools = S.isOwner && p.managed ? `<div class="sheet-actions"><button type="button" class="btn small primary" id="fEdit">Edit their cards</button></div>`
+    : S.isOwner && isWeb() && !p.demo && p.id !== S.uid ? `<div class="sheet-actions"><button type="button" class="btn small danger" id="fRemove">Remove from the swap group</button></div><p class="help">This deletes their list${S.lockOn ? " and they'd have to wait to be let in again" : ''}.</p>` : '';
   openSheet(`<h2 id="sheetTitle">${esc(p.full)}</h2>
     <p class="meta">Base ${st.base}/300 · ${st.ins} inserts · ${p.demo ? 'demo' : ago(p.updatedAt)}</p>${prefPills(p)}
     ${canAsk && (sw.length || needs.length) ? `<p class="help" style="margin-top:8px">Tap one of their swaps to ask for it${p.complete ? ', or one of their needs to offer your spare' : ''}. ${esc(p.nick)} gets a request to accept or decline.</p>` : ''}
@@ -3640,6 +3704,8 @@ function openFriend(id){
     ${ownerTools}`, root => {
       const b = root.querySelector('#fEdit');
       if (b) b.addEventListener('click', () => { switchProfile(p.id); S.tab = 'cards'; store.set('tab', 'cards'); renderAll(); });
+      const fr = root.querySelector('#fRemove');
+      if (fr) fr.addEventListener('click', () => { if (fr.dataset.armed !== '1'){ fr.dataset.armed = '1'; fr.textContent = 'Tap again to remove'; return; } removePerson(p.id); });
       root.querySelector('#fAsk').addEventListener('click', e => { const a = e.target.closest('[data-ask]'); if (a) openOffer(a.dataset.ask, { [a.dataset.side]: [a.dataset.card] }); });
     });
 }
@@ -4086,6 +4152,7 @@ $('#who').addEventListener('click', openWhoSheet);
 $('#notice').addEventListener('click', e => {
   if (e.target.closest('#retrySave')){ S.saveFailed = false; flushAll(); renderNotice(); }
   if (e.target.closest('#noticeRequests')){ S.tab = 'swaps'; store.set('tab', 'swaps'); renderAll(); window.scrollTo(0, 0); }
+  if (e.target.closest('#noticeWaiting')){ S.tab = 'friends'; store.set('tab', 'friends'); renderAll(); window.scrollTo(0, 0); }
   if (e.target.closest('#noticeJoin')) openWelcome();
 });
 $('#addPanel').addEventListener('click', e => {
@@ -4145,6 +4212,11 @@ function groupClicks(e){
 }
 $('#view-friends').addEventListener('click', e => {
   if (groupClicks(e)) return;
+  if (e.target.closest('#lockOn')){ setLock(true); return; }
+  if (e.target.closest('#copyRules')){ if (RULES_TEXT) copyText(RULES_TEXT, 'Rules copied. Paste them into Firebase and Publish.'); else toast("Couldn't load the rules. Try again in a moment."); return; }
+  if (e.target.closest('#lockOff')){ const b = e.target.closest('#lockOff'); if (b.dataset.armed !== '1'){ b.dataset.armed = '1'; b.textContent = 'Tap again: anyone with the link can join'; return; } setLock(false); return; }
+  const li = e.target.closest('[data-letin]'); if (li){ li.disabled = true; letIn(li.dataset.letin); return; }
+  const rm = e.target.closest('[data-remove]'); if (rm){ if (rm.dataset.armed !== '1'){ rm.dataset.armed = '1'; rm.textContent = 'Tap again to remove'; return; } removePerson(rm.dataset.remove); return; }
   const f = e.target.closest('[data-friend]'); if (f){ openFriend(f.dataset.friend); return; }
   if (e.target.closest('#addManaged')) openAddManaged();
   if (e.target.closest('#copyInvite')) copyText(location.origin + location.pathname, 'Link copied. Paste it into WhatsApp.');
@@ -4170,7 +4242,10 @@ function makeDbShim(F, fs){
       return {
         set: data => F.setDoc(ref, data).catch(e => { throw fbErr(e); }),
         delete: () => F.deleteDoc(ref).catch(e => { throw fbErr(e); }),
-        get: () => F.getDoc(ref).then(x => ({ id: x.id, exists: x.exists(), data: () => x.data(), metadata: x.metadata })).catch(e => { throw fbErr(e); })
+        get: () => F.getDoc(ref).then(x => ({ id: x.id, exists: x.exists(), data: () => x.data(), metadata: x.metadata })).catch(e => { throw fbErr(e); }),
+        onSnapshot: (next, error) => F.onSnapshot(ref, { includeMetadataChanges: true },
+          x => next({ id: x.id, exists: x.exists(), data: () => x.data(), metadata: x.metadata }),
+          e => error && error(fbErr(e)))
       };
     }
   };
@@ -4256,7 +4331,8 @@ async function loadAdmin(){
 }
 async function onAuth(user){
   if (!user){
-    if (S.unsub){ S.unsub(); S.unsub = null; }
+    stopListeners();
+    Object.assign(S, { lockOn: false, approvedSet: null, waiting: false });
     Object.assign(S, { uid: null, authUser: null, isOwner: false, adminUid: null, players: {}, local: {}, loaded: false, activeId: null, status: 'signedout', readOnly: false, onboardAsked: false, seenIncoming: null, seenAgreed: null, demo: false, demoPlayers: [] });
     S.dirty.clear(); S.saving.clear(); S.again.clear();
     try { localStorage.removeItem('ggn.hello'); } catch {}
@@ -4267,7 +4343,7 @@ async function onAuth(user){
   S.authUser = { anon: !!user.isAnonymous, name: user.displayName || '', email: user.email || '' };
   S.myName = user.displayName || '';
   if (!changed){ renderAll(); return; }
-  if (S.unsub){ S.unsub(); S.unsub = null; }
+  stopListeners();
   Object.assign(S, { uid: user.uid, players: {}, local: {}, loaded: false, onboardAsked: false, seenIncoming: null, seenAgreed: null, readOnly: false, activeId: user.uid, status: 'loading' });
   if (S.welcomeOpen) closeSheet();
   renderAll();
@@ -4296,9 +4372,69 @@ async function initFirebase(cfg){
   try { await F.getRedirectResult(auth); } catch (e){ if (e && e.code && e.code !== 'auth/no-auth-event') toast(authErrorText(e)); }
   F.onAuthStateChanged(auth, user => { onAuth(user); });
 }
+function stopContent(){ for (const u of S.contentSubs || []) try { u(); } catch {} S.contentSubs = []; }
+function stopData(){ stopContent(); if (S.meSub){ try { S.meSub(); } catch {} S.meSub = null; } }
+function stopListeners(){ stopData(); if (S.lockSub){ try { S.lockSub(); } catch {} S.lockSub = null; } }
+const contentSub = fn => { (S.contentSubs = S.contentSubs || []).push(fn); };
 function subscribe(){
+  stopListeners();
+  Object.assign(S, { lockOn: false, approvedSet: null, waiting: false });
+  if (!isWeb()){ listenPlayers(); return; }
+  let started = false, fallback = null;
+  S.lockSub = S.db.doc('config/lock').onSnapshot(snap => {
+    const on = !!(snap.exists && (snap.data() || {}).on === true);
+    // the phone's cache may not know about the lock yet: wait a moment for the server (offline: carry on)
+    if (!started && !snap.exists && snap.metadata && snap.metadata.fromCache){
+      if (!fallback) fallback = setTimeout(() => { if (!started){ started = true; S.lockOn = false; startData(); } }, 2500);
+      return;
+    }
+    clearTimeout(fallback);
+    if (started && on === S.lockOn) return;
+    started = true; S.lockOn = on;
+    startData();
+  }, () => { clearTimeout(fallback); if (!started){ started = true; S.lockOn = false; startData(); } });   // rules from before the lock: unlocked
+}
+function startData(){
+  stopData();
+  if (!S.lockOn || S.isOwner){
+    S.waiting = false;
+    listenPlayers();
+    if (S.lockOn) listenApproved(); else S.approvedSet = null;
+    renderAll();
+    return;
+  }
+  let state = null;
+  S.meSub = S.db.doc('approved/' + S.uid).onSnapshot(snap => {
+    const ok = !!snap.exists;
+    if (!ok && snap.metadata && snap.metadata.fromCache) return;   // not in the cache isn't the same as not let in
+    if (state === ok) return;
+    const was = state; state = ok;
+    stopContent();
+    if (ok){ S.waiting = false; listenPlayers(); listenApproved(); if (was === false) toast("You're in! Your friends and swaps are showing now."); }
+    else { S.waiting = true; S.approvedSet = null; S.players = {}; listenOwnDoc(); }
+    renderAll();
+  }, () => { if (state === null){ state = false; S.waiting = true; listenOwnDoc(); renderAll(); } });
+}
+function listenApproved(){
+  contentSub(S.db.collection('approved').onSnapshot(snap => { S.approvedSet = new Set(snap.docs.map(d => d.id)); renderAll(); },
+    () => { S.approvedSet = new Set(); renderAll(); }));
+}
+function listenOwnDoc(){
+  contentSub(S.db.doc('players/' + S.uid).onSnapshot(snap => {
+    const next = {};
+    if (snap.exists){ const v = sanitize(snap.data(), S.uid); if (v) next[S.uid] = v; }
+    S.players = next;
+    for (const id of Object.keys(S.local)) if (id !== 'local' && !S.dirty.has(id) && !S.saving.has(id)) delete S.local[id];
+    if (!snap.metadata || !snap.metadata.fromCache){ S.loaded = true; S.slow = false; }
+    S.status = 'ready';
+    renderAll();
+    if (S.loaded) applyInvite();
+    if (S.loaded && S.uid && !getDoc(S.uid) && !S.readOnly && !S.onboardAsked){ S.onboardAsked = true; openJoin(); }
+  }, () => { S.status = 'error'; renderAll(); }));
+}
+function listenPlayers(){
   const slowTimer = setTimeout(() => { if (!S.loaded){ S.slow = true; renderNotice(); } }, 10000);
-  S.unsub = S.db.collection('players').onSnapshot(snap => {
+  contentSub(S.db.collection('players').onSnapshot(snap => {
     const next = {};
     for (const d of snap.docs){ if (d.exists){ const v = sanitize(d.data(), d.id); if (v) next[d.id] = v; } }
     S.players = next;
@@ -4311,9 +4447,10 @@ function subscribe(){
     if (S.loaded && S.uid && !getDoc(S.uid) && !S.readOnly && !S.onboardAsked){ S.onboardAsked = true; openJoin(); }
   }, err => {
     clearTimeout(slowTimer);
+    if (S.waiting) return;   // just been locked out: the waiting screen takes over
     S.status = (err && err.code === 'revoked') ? (isWeb() ? 'signedout' : 'nodb') : 'error';
     renderAll();
-  });
+  }));
 }
 
 /* ===================== Start ===================== */

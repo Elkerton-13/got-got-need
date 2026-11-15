@@ -1,10 +1,12 @@
 rules_version = '2';
 
 // Got Got Need: who can read and change what.
-// - Anyone signed in (Google or "just this phone") can read everyone's card lists, so swaps can be matched.
 // - Each person can only change their own list (players/<their user id>).
-// - The admin (the first person to sign in with Google) can also keep lists for people
-//   who don't use the app ("managed" lists) and tidy anyone's list.
+// - The organiser (the first person to sign in with Google) can keep lists for people who don't use
+//   the app ("managed" lists), tidy anyone's list, and lock the swap group.
+// - Unlocked: anyone signed in can read everyone's lists, so swaps can be matched.
+// - Locked (config/lock is on): only the organiser and the people they've let in (approved/<user id>)
+//   can read the swap group. Newcomers can still set up their own list while they wait.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -12,6 +14,12 @@ service cloud.firestore {
     function withGoogle() { return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
     function adminDoc() { return /databases/$(database)/documents/config/admin; }
     function isAdmin() { return signedIn() && exists(adminDoc()) && get(adminDoc()).data.uid == request.auth.uid; }
+    function lockDoc() { return /databases/$(database)/documents/config/lock; }
+    function locked() { return exists(lockDoc()) && get(lockDoc()).data.on == true; }
+    function letIn() {
+      return signedIn() && (!locked() || isAdmin()
+        || exists(/databases/$(database)/documents/approved/$(request.auth.uid)));
+    }
 
     function validPlayer(d) {
       return d.keys().hasOnly(['v', 'adult', 'child', 'nick', 'counts', 'complete', 'scope', 'other', 'managed', 'updatedAt', 'offers', 'replies'])
@@ -28,7 +36,7 @@ service cloud.firestore {
         && d.replies is map && d.replies.size() <= 80;
     }
 
-    // The first person to sign in with Google becomes the admin. Nobody can change it afterwards
+    // The first person to sign in with Google becomes the organiser. Nobody can change it afterwards
     // (to reset it, delete this document in the Firebase console).
     match /config/admin {
       allow read: if signedIn();
@@ -38,8 +46,25 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /players/{pid} {
+    // The lock switch. Only the organiser can flip it.
+    match /config/lock {
       allow read: if signedIn();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['on', 'at'])
+        && request.resource.data.on is bool;
+      allow delete: if isAdmin();
+    }
+
+    // People the organiser has let in. Only the organiser can add or remove them.
+    match /approved/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || letIn());
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['at', 'by']);
+      allow delete: if isAdmin();
+    }
+
+    match /players/{pid} {
+      allow get: if signedIn() && (pid == request.auth.uid || letIn());
+      allow list: if letIn();
       allow create, update: if signedIn()
         && validPlayer(request.resource.data)
         && (pid == request.auth.uid || isAdmin())
