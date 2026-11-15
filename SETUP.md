@@ -47,6 +47,7 @@ firebase deploy
 - **If Google sign-in won't open from inside WhatsApp**, tap the ⋯ menu and choose **Open in browser** (Chrome or Safari).
 - **Who can see what.** Anyone who joins through the link can see everyone's names and card lists. Use first names only. Each person can only change their own list. The admin can also edit or remove lists.
 - **Photos.** On the Photo tab, people copy a set of instructions into ChatGPT or Claude with a photo of their cards. Then they paste the reply back into the app. Free accounts work. **Add to my cards** sorts them: a card they haven't got goes in their collection, and copies they already have (or cards from sets they don't collect) become swaps.
+- **Parallels.** Shiny, coloured or numbered versions of a card are kept apart from the normal ones, so a parallel never counts as a swap. Add them with **✦ It's a parallel** on the number pad, by typing `32p`, or by holding a card and choosing **One of these is a parallel**. The AI photo step marks them with `p` too.
 - **Kick-off screen.** Opening the app shows a stadium where you flick a ball into the net to go in. It shows once per visit, has a **Skip** button, and can be switched off in **Settings → Kick-off screen**. Add `?kick` to the link to see it again.
 - **Resetting the admin.** In the Firebase console, open **Firestore Database**, then `config`, then `admin`, and delete that document. The next person to sign in with Google becomes the admin.
 - **Updating the app later.** Replace `docs/index.html` and run `firebase deploy` again.

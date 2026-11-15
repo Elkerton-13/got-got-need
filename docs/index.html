@@ -43,6 +43,8 @@
   --good:#17784C;
   --bad:#BF2530;
   --scrim:rgba(8,14,30,.48);
+  --par:#7B3FD0;
+  --par-soft:#EEE4FB;
   --display:"Avenir Next Condensed","Roboto Condensed","sans-serif-condensed","Arial Narrow",system-ui,sans-serif;
   --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --r:10px;
@@ -54,6 +56,7 @@
     --accent:#7C9BFF; --accent-ink:#0A1020; --accent-soft:#1D2A52;
     --gold:#F1BE45; --gold-ink:#1E1600; --gold-soft:#3A2F12;
     --good:#4CC38A; --bad:#FF6B6B; --scrim:rgba(0,0,0,.6);
+    --par:#C49BFF; --par-soft:#2C2145;
     color-scheme:dark;
   }
 }
@@ -62,6 +65,7 @@
   --accent:#7C9BFF; --accent-ink:#0A1020; --accent-soft:#1D2A52;
   --gold:#F1BE45; --gold-ink:#1E1600; --gold-soft:#3A2F12;
   --good:#4CC38A; --bad:#FF6B6B; --scrim:rgba(0,0,0,.6);
+  --par:#C49BFF; --par-soft:#2C2145;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -104,7 +108,7 @@ small{font-size:12.5px}
 .btn.small{min-height:34px;padding:0 11px;font-size:13px}
 .btn:disabled{opacity:.45;cursor:default}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.key,.linkbtn,.frow):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+:is(.btn,.tile,.mode,.seg button,.chipbtn,.tabs button,.who,.key,.linkbtn,.frow,.pchip,.ministep button):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* summary */
@@ -230,6 +234,27 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .chip.give{background:var(--gold-soft);border-color:transparent}
 .chip.bad{background:transparent;border-color:var(--bad);color:var(--bad)}
 .chip.hit{outline:2px solid var(--good);outline-offset:-2px}
+.chip.par{align-items:center;background:var(--par-soft);border-color:transparent}
+
+/* parallels */
+.pdot{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);vertical-align:-1px}
+.tile .pp{position:absolute;right:-6px;bottom:-7px;min-width:22px;height:20px;padding:0 5px;border-radius:10px;background:linear-gradient(135deg,#9A5BFF,#FF4FA3);color:#fff;font:800 11px/20px var(--body);text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.parrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.parrow select{min-height:36px;max-width:100%;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-weight:700;font-size:14px}
+.chipbtn.parbtn[aria-pressed="true"]{background:linear-gradient(135deg,#9A5BFF,#FF4FA3);border-color:transparent;color:#fff}
+.edpar{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.edpar:first-child{border-top:0}
+.edpar b{flex:1;min-width:0}
+.ministep{display:inline-flex;align-items:center;gap:6px}
+.ministep button{width:38px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font:800 19px/1 var(--display);cursor:pointer}
+.ministep output{min-width:2ch;text-align:center;font:800 19px/1 var(--display);font-variant-numeric:tabular-nums}
+.parpick{margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--paper)}
+.parpick h4{margin:10px 0 6px}
+.parpick h4:first-child{margin-top:0}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pchip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 11px;border:1px solid var(--line);border-radius:18px;background:var(--surface);font-weight:700;font-size:13px;cursor:pointer}
+.pchip small{font-weight:600;color:var(--muted)}
+.parline{margin:10px 0 0}
 
 /* swaps */
 .partner header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
@@ -985,6 +1010,7 @@ try {
             <select id="padSet"></select>
             <div class="readout" id="readout" aria-live="polite"><span id="padArt"></span><b id="padNum">–</b><span id="padName">Number 1–300</span></div>
           </div>
+          <div class="parrow"><button type="button" class="chipbtn parbtn" id="padPar" aria-pressed="false">✦ It's a parallel</button><label class="sr" for="padParType">Which parallel</label><select id="padParType" hidden></select></div>
           <div class="keypad" id="keypad">
             <button type="button" class="key" data-k="1">1</button>
             <button type="button" class="key" data-k="2">2</button>
@@ -999,7 +1025,7 @@ try {
             <button type="button" class="key" data-k="0">0</button>
             <button type="button" class="key go" data-k="go" id="padGo" disabled>Add</button>
           </div>
-          <p class="log" id="padLog">Flip through your pile and punch in each number. Same number twice = two copies.</p>
+          <p class="log" id="padLog">Flip through your pile and punch in each number. Same number twice = two copies. Got a parallel? Tap ✦ It's a parallel first.</p>
         </div>
 
         <div id="pane-list" hidden>
@@ -1008,7 +1034,7 @@ try {
             <input id="entry" type="text" placeholder="12 45 101-105 AK1 8B7x2" autocapitalize="characters" spellcheck="false" enterkeyhint="done">
             <button id="entryBtn" class="btn primary" type="submit" disabled>Add</button>
           </form>
-          <p class="help">Separate with spaces or commas. Ranges like <b>101-105</b> work, insert codes like <b>AK1</b> or <b>RT12</b>, and <b>x2</b> for two copies. Pasting a friend's WhatsApp list works too.</p>
+          <p class="help">Separate with spaces or commas. Ranges like <b>101-105</b> work, insert codes like <b>AK1</b> or <b>RT12</b>, and <b>x2</b> for two copies. Add <b>p</b> for a parallel, like <b>32p</b>. Pasting a friend's WhatsApp list works too.</p>
           <div id="preview" class="preview" aria-live="polite"></div>
         </div>
 
@@ -1028,11 +1054,12 @@ try {
             <button type="button" class="chipbtn" data-filter="need" aria-pressed="false">Need</button>
             <button type="button" class="chipbtn" data-filter="got" aria-pressed="false">Got</button>
             <button type="button" class="chipbtn" data-filter="swap" aria-pressed="false">Swaps</button>
+            <button type="button" class="chipbtn" data-filter="par" aria-pressed="false">✦ Parallels</button>
           </div>
         </div>
         <div class="gridhint" id="gridHint"></div>
         <div class="grid" id="grid"></div>
-        <div class="legend" aria-hidden="true"><span><i></i>Need</span><span><i class="got"></i>Got</span><span><i class="swap"></i>Swap (+ = spares)</span><span>★ Case hit or short print</span></div>
+        <div class="legend" aria-hidden="true"><span><i></i>Need</span><span><i class="got"></i>Got</span><span><i class="swap"></i>Swap (+ = spares)</span><span>★ Case hit or short print</span><span>✦ Parallels</span></div>
       </div>
     </section>
 
@@ -1866,6 +1893,39 @@ for (const [code, name, note, rare, raw] of SET_DEFS){
 const BASE_IDS = ALL.filter(c => c.set === 'base').map(c => c.id);
 const INSERT_IDS = ALL.filter(c => c.set !== 'base').map(c => c.id);
 const CODES = Object.keys(SET_BY_CODE).sort((a, b) => b.length - a.length);
+const ORDER = new Map(ALL.map((c, i) => [c.id, i]));
+
+/* Parallels: shiny, coloured or numbered versions of a card. Kept apart from the normal copies, stored as "32~PV".
+   Numbered foils of the same colour and number (Sparkle, Mini-Diamond, Rainbow) count as one. */
+const PARALLELS = [
+  ['P', 'Not sure which', 'Parallel', 'quick', '#9A6BFF'],
+  ['PL', 'PL Parallel', 'PL Parallel', 'shop', '#3D63E0'],
+  ['GRL', 'Gold Rainbow Laser', 'Gold Laser', 'shop', '#E9AE1C'],
+  ['BV', 'Blue Voltage', 'Blue Voltage', 'volt', '#2F7BFF', 'Super Tin'],
+  ['GV', 'Green Voltage', 'Green Voltage', 'volt', '#2DBE60', 'Blaster'],
+  ['PV', 'Pink Voltage', 'Pink Voltage', 'volt', '#FF4FA3', 'Mega Tin'],
+  ['UV', 'Purple Voltage', 'Purple Voltage', 'volt', '#8A3FD1', 'Multi-Pack'],
+  ['YV', 'Yellow Voltage', 'Yellow Voltage', 'volt', '#F5D000', 'Eco Pack'],
+  ['A499', 'Aqua /499', 'Aqua /499', 'num', '#22C3C9'],
+  ['P399', 'Pink /399', 'Pink /399', 'num', '#FF6FB5'],
+  ['Y299', 'Yellow /299', 'Yellow /299', 'num', '#F5D000'],
+  ['G250', 'Gold /250', 'Gold /250', 'num', '#E0B13A'],
+  ['U199', 'Purple /199', 'Purple /199', 'num', '#8A3FD1'],
+  ['B150', 'Blue /150', 'Blue /150', 'num', '#2F7BFF'],
+  ['G99', 'Green /99', 'Green /99', 'num', '#2DBE60'],
+  ['W75', 'Black & White /75', 'B&W /75', 'num', '#8E96A8'],
+  ['G50', 'Gold /50', 'Gold /50', 'num', '#C9971A'],
+  ['NB38', 'Netbuster /38', 'Netbuster /38', 'num', '#5B6B8C'],
+  ['O25', 'Orange /25', 'Orange /25', 'num', '#FF7A1A'],
+  ['K10', 'Black /10', 'Black /10', 'num', '#1B1F2A'],
+  ['R5', 'Red /5', 'Red /5', 'num', '#E0262F'],
+  ['FF1', 'FoilFractor 1/1', 'FoilFractor 1/1', 'num', 'linear-gradient(135deg,#ff5f6d,#ffc371,#47e5bc,#5f8bff,#c06cff)']
+].map(([code, name, short, group, col, where]) => ({ code, name, short, group, col, where: where || '' }));
+const PAR_BY_CODE = Object.fromEntries(PARALLELS.map(p => [p.code, p]));
+const PAR_GROUPS = [['quick', 'Quick'], ['shop', 'From packs'], ['volt', 'Voltage (tins and packs)'], ['num', 'Numbered foils']];
+const parKey = (id, code) => id + '~' + code;
+function splitKey(k){ k = String(k); const i = k.indexOf('~'); return i < 0 ? [k, null] : [k.slice(0, i), k.slice(i + 1)]; }
+function isParKey(k){ const [id, code] = splitKey(k); return !!code && BY_ID.has(id) && !!PAR_BY_CODE[code]; }
 
 const SECTIONS = [];
 SECTIONS.push({ key: 'all', group: 'Everything', label: 'Every card · base + inserts', ids: BASE_IDS.concat(INSERT_IDS) });
@@ -1889,6 +1949,13 @@ function resFor(id){
 function cnt(p, id){
   const v = p && p.counts ? p.counts[id] : 0;
   return typeof v === 'number' && v > 0 ? Math.min(99, Math.floor(v)) : 0;
+}
+function parsOf(p, id){ const out = []; for (const x of PARALLELS){ const n = cnt(p, parKey(id, x.code)); if (n) out.push({ code: x.code, n }); } return out; }
+function parTotal(p, id){ let t = 0; for (const x of PARALLELS) t += cnt(p, parKey(id, x.code)); return t; }
+function allPars(p){
+  const out = [];
+  for (const k of Object.keys((p && p.counts) || {})){ const n = cnt(p, k); if (n && isParKey(k)){ const [id, code] = splitKey(k); out.push({ id, code, n }); } }
+  return out.sort((a, b) => ORDER.get(a.id) - ORDER.get(b.id) || PARALLELS.indexOf(PAR_BY_CODE[a.code]) - PARALLELS.indexOf(PAR_BY_CODE[b.code]));
 }
 function inScope(p, c){
   const sc = p.scope && p.scope.length ? p.scope : ['base'];
@@ -1924,17 +1991,19 @@ function parseEntry(text){
       else { bad.push(tok); last = []; }
       continue;
     }
-    if ((m = tok.match(/^(\d{1,3})(?:X(\d{1,2}))?$/))){
-      const num = parseInt(m[1], 10); const n = m[2] ? Math.max(1, parseInt(m[2], 10)) : 1;
-      if (num >= 1 && num <= 300){ add(String(num), n); last = [String(num)]; } else { bad.push(tok); last = []; }
+    if ((m = tok.match(/^(\d{1,3})(P)?(?:X(\d{1,2}))?$/))){
+      const num = parseInt(m[1], 10); const n = m[3] ? Math.max(1, parseInt(m[3], 10)) : 1;
+      const id = m[2] ? parKey(String(num), 'P') : String(num);
+      if (num >= 1 && num <= 300){ add(id, n); last = [id]; } else { bad.push(tok); last = []; }
       continue;
     }
-    if ((m = tok.match(/^(8B|[A-Z]{2,3})-?(\d{1,2})(?:-(?:8B|[A-Z]{2,3})?(\d{1,2}))?(?:X(\d{1,2}))?$/))){
+    if ((m = tok.match(/^(8B|[A-Z]{2,3})-?(\d{1,2})(?:-(?:8B|[A-Z]{2,3})?(\d{1,2}))?(P)?(?:X(\d{1,2}))?$/))){
       const s = SET_BY_CODE[m[1]];
       const a0 = parseInt(m[2], 10), b0 = m[3] ? parseInt(m[3], 10) : a0;
       const a = Math.min(a0, b0), b = Math.max(a0, b0);
-      const n = m[4] ? Math.max(1, parseInt(m[4], 10)) : 1;
-      if (s && a >= 1 && b <= s.ids.length){ last = []; for (let i = a; i <= b; i++){ add(m[1] + i, n); last.push(m[1] + i); } }
+      const n = m[5] ? Math.max(1, parseInt(m[5], 10)) : 1;
+      const k = i => m[4] ? parKey(m[1] + i, 'P') : m[1] + i;
+      if (s && a >= 1 && b <= s.ids.length){ last = []; for (let i = a; i <= b; i++){ add(k(i), n); last.push(k(i)); } }
       else { bad.push(tok); last = []; }
       continue;
     }
@@ -1951,7 +2020,8 @@ function applyToCounts(counts, items, mode, collects){
   for (const { id, n } of items){
     const b = counts[id] || 0;
     let a = b;
-    if (mode === 'got') a = Math.max(b, n);
+    if (String(id).includes('~')) a = mode === 'remove' ? Math.max(0, b - n) : b + n;   // parallels: just copies
+    else if (mode === 'got') a = Math.max(b, n);
     else if (mode === 'swap') a = Math.max(b, 1) + n;
     else if (mode === 'add') a = (b === 0 && (!collects || collects(id))) ? n : Math.max(b, 1) + n;
     else a = Math.max(0, b - n);
@@ -1980,13 +2050,15 @@ function rankMatches(me, friends){
     (y.score - x.score) || (y.get.length - x.get.length) || (y.give.length - x.give.length) || x.f.nick.localeCompare(y.f.nick));
 }
 function stats(p){
-  let base = 0, ins = 0, spares = 0;
+  let base = 0, ins = 0, spares = 0, par = 0;
   for (const [id, v] of Object.entries(p.counts || {})){
-    const c = BY_ID.get(id); if (!c || !(v > 0)) continue;
+    if (!(v > 0)) continue;
+    const c = BY_ID.get(id);
+    if (!c){ if (isParKey(id)) par += cnt(p, id); continue; }
     if (c.set === 'base') base++; else ins++;
     if (v > 1) spares += v - 1;
   }
-  return { base, ins, spares };
+  return { base, ins, spares, par };
 }
 
 /* Swap offers. An offer lives in the SENDER's doc: give = cards the sender gives, get = cards the sender gets.
@@ -2096,7 +2168,7 @@ function sanitize(raw, id){
   const counts = {};
   if (raw.counts && typeof raw.counts === 'object'){
     for (const [k, v] of Object.entries(raw.counts)){
-      if (BY_ID.has(k)){ const n = clampInt(v, 0, 99); if (n > 0) counts[k] = n; }
+      if (BY_ID.has(k) || isParKey(k)){ const n = clampInt(v, 0, 99); if (n > 0) counts[k] = n; }
     }
   }
   let scope = Array.isArray(raw.scope) ? raw.scope.filter(x => x === 'base' || SET_BY_CODE[x]) : ['base'];
@@ -2507,14 +2579,23 @@ function celebrate(gave, got, otherName, myName){
 }
 
 /* ===================== Rendering ===================== */
+function parChip(c, code, n){
+  const p = PAR_BY_CODE[code] || PAR_BY_CODE.P;
+  return `<span class="chip par" title="${esc(c.name + ' · ' + p.name)}"><span class="pdot" style="background:${p.col}"></span><b>${c.id}</b>${esc(c.short)} · ${esc(p.short)}${n > 1 ? ` ×${n}` : ''}</span>`;
+}
+function itemChip(it, cls){
+  const [id, code] = splitKey(it.id), c = BY_ID.get(id);
+  if (!c) return '';
+  return code ? parChip(c, code, it.n) : cardChip(c, cls, it.n > 1 ? ` ×${it.n}` : '');
+}
 function cardChip(c, cls, extra){
   return `<span class="chip ${cls || ''}" title="${esc(c.name + ' · ' + CLUBS[c.club][0])}"><b>${c.id}</b>${esc(c.short)}${c.rare ? ' ★' : ''}${extra || ''}</span>`;
 }
 function tileHTML(c, doc){
-  const n = cnt(doc, c.id);
+  const n = cnt(doc, c.id), pt = parTotal(doc, c.id);
   const cls = n === 0 ? '' : n === 1 ? ' got' : ' swap';
-  const state = n === 0 ? 'need' : n === 1 ? 'got' : `got, ${plural(n - 1, 'swap')}`;
-  return `<button type="button" class="tile${cls}" data-id="${c.id}" aria-label="${esc(`${c.id} ${c.name}, ${CLUBS[c.club][0]}: ${state}`)}"><span class="n${c.id.length > 3 ? ' long' : ''}">${c.id}</span><span class="p">${esc(c.short)}</span>${n > 1 ? `<span class="b">+${n - 1}</span>` : ''}${c.rare ? '<span class="star" aria-hidden="true">★</span>' : ''}</button>`;
+  const state = (n === 0 ? 'need' : n === 1 ? 'got' : `got, ${plural(n - 1, 'swap')}`) + (pt ? `, plus ${plural(pt, 'parallel')}` : '');
+  return `<button type="button" class="tile${cls}" data-id="${c.id}" aria-label="${esc(`${c.id} ${c.name}, ${CLUBS[c.club][0]}: ${state}`)}"><span class="n${c.id.length > 3 ? ' long' : ''}">${c.id}</span><span class="p">${esc(c.short)}</span>${n > 1 ? `<span class="b">+${n - 1}</span>` : ''}${c.rare ? '<span class="star" aria-hidden="true">★</span>' : ''}${pt ? `<span class="pp" aria-hidden="true">✦${pt > 1 ? pt : ''}</span>` : ''}</button>`;
 }
 function avatar(p){
   let h = 0; for (const ch of String(p.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -2598,6 +2679,7 @@ function renderSummary(){
       <div class="stat"><div class="k">Inserts</div><div class="v">${st.ins}<small>/${INSERT_IDS.length}</small></div></div>
       <button type="button" class="stat statbtn" id="showSwaps" aria-label="Show my ${st.spares} swaps"><div class="k">Swaps</div><div class="v">${st.spares}</div></button>
     </div>
+    ${st.par ? `<p class="parline"><button type="button" class="linkbtn" id="showPars">✦ ${plural(st.par, 'parallel')}</button> <small class="muted">kept apart from your normal cards</small></p>` : ''}
     <label class="toggle"><input type="checkbox" id="completeToggle" ${d.complete ? 'checked' : ''} ${canWriteActive() ? '' : 'disabled'}>
       <span><b>Show friends what I need</b><br><small class="muted">Switch on once you've ticked off every card you've got, so swap suggestions are right.</small></span></label>
     <div class="actions"><button type="button" class="btn small" id="copyMine">Copy my swaps list</button><button type="button" class="btn small ghost" id="openSettings">Settings</button>${pendingFor(S.activeId).length ? `<button type="button" class="btn small primary" id="goToSwap">${plural(pendingFor(S.activeId).length, 'swap')} to hand over</button>` : ''}</div>`;
@@ -2627,6 +2709,7 @@ function visibleCards(){
   if (S.filter === 'need') list = list.filter(c => cnt(d, c.id) === 0);
   else if (S.filter === 'got') list = list.filter(c => cnt(d, c.id) >= 1);
   else if (S.filter === 'swap') list = list.filter(c => cnt(d, c.id) > 1);
+  else if (S.filter === 'par') list = list.filter(c => parTotal(d, c.id) > 0);
   return list;
 }
 function renderGrid(){
@@ -2655,7 +2738,7 @@ function renderModes(){
   const go = $('#padGo');
   go.classList.toggle('swap', S.mode === 'swap');
   go.classList.toggle('remove', S.mode === 'remove');
-  go.textContent = S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove';
+  go.textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove';
   $('#entryBtn').textContent = S.mode === 'got' ? 'Add as got' : S.mode === 'swap' ? 'Add swaps' : 'Remove';
 }
 function renderAddMode(){
@@ -2677,7 +2760,15 @@ function renderPad(){
   $('#padNum').textContent = S.padBuf ? (S.padSet === 'base' ? '' : S.padSet) + S.padBuf : '–';
   ro.classList.toggle('ok', !!c);
   ro.classList.toggle('no', !!S.padBuf && !c);
-  if (c){
+  const pb = $('#padPar'), pt = $('#padParType'), par = PAR_BY_CODE[S.padParType] || PAR_BY_CODE.P;
+  pb.setAttribute('aria-pressed', String(!!S.padPar));
+  pt.hidden = !S.padPar;
+  if (pt.value !== par.code) pt.value = par.code;
+  $('#padGo').textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : (S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove');
+  if (c && S.padPar){
+    const n = cnt(activeDoc() || EMPTY, parKey(c.id, par.code));
+    $('#padName').textContent = `✦ ${par.short} · ${c.name}${n ? ` · you have ${n}` : ''}`;
+  } else if (c){
     const n = cnt(activeDoc() || EMPTY, c.id);
     $('#padName').textContent = `${c.name} · ${CLUBS[c.club][1]}${n ? ` · you have ${n}` : ''}`;
   } else if (S.padBuf){
@@ -2693,10 +2784,13 @@ function padPress(k){
   if (k === 'back'){ S.padBuf = S.padBuf.slice(0, -1); renderPad(); return; }
   if (k === 'go'){
     const c = padCard(); if (!c) return;
-    const changed = applyItems([{ id: c.id, n: 1 }], S.mode);
+    const par = S.padPar ? (PAR_BY_CODE[S.padParType] || PAR_BY_CODE.P) : null;
+    const key = par ? parKey(c.id, par.code) : c.id;
+    const changed = applyItems([{ id: key, n: 1 }], S.mode);
+    S.padPar = false;   // one at a time: the next card is a normal one again
     if (changed){
-      const n = cnt(activeDoc(), c.id);
-      S.padLog.unshift(`${c.id} ${c.short}${n > 1 ? ` (+${n - 1})` : n === 0 ? ' (need)' : ''}`);
+      const n = cnt(activeDoc(), key);
+      S.padLog.unshift(par ? `${c.id} ${c.short} ✦ ${par.short}${n > 1 ? ` (×${n})` : ''}` : `${c.id} ${c.short}${n > 1 ? ` (+${n - 1})` : n === 0 ? ' (need)' : ''}`);
       S.padLog = S.padLog.slice(0, 8);
       renderPadLog(true);
       if (navigator.vibrate) try { navigator.vibrate(12); } catch {}
@@ -2713,14 +2807,14 @@ function padPress(k){
 function renderPadLog(canUndo){
   $('#padLog').innerHTML = S.padLog.length
     ? 'Just done: ' + esc(S.padLog.join(', ')) + (canUndo && S.undo ? ' · <button type="button" class="linkbtn" id="padUndo">Undo last</button>' : '')
-    : 'Flip through your pile and punch in each number. Same number twice = two copies.';
+    : "Flip through your pile and punch in each number. Same number twice = two copies. Got a parallel? Tap ✦ It's a parallel first.";
 }
 function renderPreview(){
   const val = $('#entry').value;
   const { items, bad } = parseEntry(val);
   $('#entryBtn').disabled = !items.length;
   if (!val.trim()){ $('#preview').innerHTML = ''; return; }
-  const shown = items.slice(0, 40).map(({ id, n }) => cardChip(BY_ID.get(id), S.mode === 'swap' ? 'give' : 'get', n > 1 ? ` ×${n}` : '')).join('');
+  const shown = items.slice(0, 40).map(it => itemChip(it, S.mode === 'swap' ? 'give' : 'get')).join('');
   const more = items.length > 40 ? `<span class="chip">+${items.length - 40} more</span>` : '';
   const badHtml = bad.length ? `<p class="flag">Not recognised: ${esc(bad.slice(0, 12).join(', '))}${bad.length > 12 ? '…' : ''}</p>` : '';
   $('#preview').innerHTML = `${items.length ? `<small class="muted">${plural(items.length, 'card')} ready</small><div class="chips">${shown}${more}</div>` : ''}${badHtml}`;
@@ -2751,22 +2845,24 @@ function renderPhotoPane(){
     <textarea id="aiReply" rows="3" placeholder="GGN: 12 32x2 45 AK1" spellcheck="false"></textarea>
     <div id="aiPreview" class="preview" aria-live="polite"></div>
     <div class="sheet-actions"><button type="button" class="btn primary" data-aiadd="add" disabled>Add to my cards</button></div>
-    <p class="help">Sorts them for you: a card you haven't got goes in your collection, and any you already have become swaps. Cards from sets you don't collect go straight to swaps.</p>
+    <p class="help">Sorts them for you: a card you haven't got goes in your collection, and any you already have become swaps. Cards from sets you don't collect go straight to swaps. Parallels (marked p) go on your parallels list.</p>
     <div class="row wrap" style="margin-top:6px"><small class="muted">Or:</small><button type="button" class="btn small ghost" data-aiadd="swap" disabled>They're all swaps</button><button type="button" class="btn small ghost" data-aiadd="got" disabled>Just mark as got</button></div>
     <p class="help">Works with free or paid ChatGPT and Claude. Check the list before you add it, because AI can misread cards.</p>`;
   el.innerHTML = html;
   if (keep){ $('#aiReply').value = keep; renderAiPreview(); }
 }
 function splitAdd(doc, items){
-  const keep = [], spare = [];
+  const keep = [], spare = [], par = [];
   for (const { id, n } of items){
+    if (String(id).includes('~')){ if (isParKey(id)) par.push({ id, n }); continue; }
     const c = BY_ID.get(id); if (!c) continue;
     const k = cnt(doc, id) === 0 && inScope(doc || EMPTY, c) ? 1 : 0;
     if (k) keep.push({ id, n: 1 });
     if (n - k > 0) spare.push({ id, n: n - k });
   }
-  return { keep, spare };
+  return { keep, spare, par };
 }
+function andList(parts){ parts = parts.filter(Boolean); return parts.length < 2 ? (parts[0] || '') : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1]; }
 function aiSource(text){ const m = String(text || '').match(/GGN:\s*([^\n\r]*)/i); return m ? m[1] : String(text || ''); }
 function renderAiPreview(){
   const box = $('#aiReply'); if (!box) return;
@@ -2779,6 +2875,7 @@ function renderAiPreview(){
   $('#aiPreview').innerHTML = (items.length ? `<small class="muted">${plural(total, 'card')} found</small>`
       + (sp.keep.length ? `<h4 style="margin-top:10px">For your collection · ${sp.keep.length}</h4>${chipsOf(sp.keep, 'get')}` : '')
       + (sp.spare.length ? `<h4 style="margin-top:10px">Swaps · ${sp.spare.reduce((a, b) => a + b.n, 0)}</h4>${chipsOf(sp.spare, 'give')}` : '')
+      + (sp.par.length ? `<h4 style="margin-top:10px">✦ Parallels · ${sp.par.reduce((a, b) => a + b.n, 0)}</h4><div class="chips" style="margin-top:6px">${sp.par.map(it => itemChip(it)).join('')}</div>` : '')
     : '<p class="flag">No card numbers found. Paste the line that starts with GGN:</p>')
     + (bad.length ? `<p class="flag">Not recognised: ${esc(bad.slice(0, 12).join(', '))}</p>` : '');
 }
@@ -2801,10 +2898,11 @@ Rules:
 - If you can read the number or code on the card, use it.
 - If you can only see the front, match the player and club. If you can't tell whether it's a base card or an insert, use the base number.
 - If the same card appears more than once, write it like 32x2.
+- If a card is a parallel (a shiny, coloured, foil or numbered version of a normal card, such as a Voltage, Gold Laser or a card numbered like 23/99), put p straight after its number, like 32p. Normal cards have no p.
 - Leave out anything you can't identify. Don't guess.
 
 Reply with ONE line only. Start it with GGN: and then list the numbers and codes separated by spaces, for example:
-GGN: 12 32x2 45 AK1 8B7`;
+GGN: 12 32x2 45p AK1 8B7`;
 }
 function renderBadges(){
   const me = activeDoc();
@@ -3075,6 +3173,9 @@ function openJoin(){
     }, { page: true, locked: true });
 }
 function copiesLabel(n){ return n === 0 ? "You need this card" : n === 1 ? 'Got it, no swaps' : `Got it + ${plural(n - 1, 'swap')}`; }
+function parPicker(){
+  return PAR_GROUPS.map(([g, label]) => `<h4>${esc(label)}</h4><div class="pchips">${PARALLELS.filter(p => p.group === g).map(p => `<button type="button" class="pchip" data-pickpar="${p.code}"><span class="pdot" style="background:${p.col}"></span>${esc(p.name)}${p.where ? ` <small>${esc(p.where)}</small>` : ''}</button>`).join('')}</div>`).join('');
+}
 function openCardEditor(id){
   if (!canWriteActive()){ needJoin(); return; }
   if (!$('#sheet').hidden && S.editing === id) return;
@@ -3085,26 +3186,71 @@ function openCardEditor(id){
   openSheet(`<div class="artwrap">${cardArt(c, 'l')}</div>
     <h2 id="sheetTitle">${c.id} · ${esc(c.name)}</h2>
     <p class="meta">${esc(CLUBS[c.club][0])} · ${esc(setName)}${c.rare ? ' · ★' : ''}</p>
-    <p style="margin-top:14px"><b>How many have you got?</b></p>
+    <p style="margin-top:14px"><b>How many normal ones have you got?</b></p>
     <div class="stepper"><button type="button" class="key" id="edMinus" aria-label="One fewer">−</button><output id="edCount" aria-live="polite"></output><button type="button" class="key" id="edPlus" aria-label="One more">+</button></div>
     <p class="help" id="edLabel" style="text-align:center"></p>
-    <div class="sheet-actions"><button type="button" class="btn" id="edNeed">Set to 0 (need it)</button><button type="button" class="btn primary" data-close>Done</button></div>`, root => {
+    <div id="edParWrap">
+      <h4 style="margin-top:16px">✦ Parallels</h4>
+      <p class="help" style="margin-top:0">Shiny, coloured or numbered versions of this card. They're kept apart from your normal ones, so they never count as swaps.</p>
+      <div id="edPars"></div>
+      <div class="row wrap" style="margin-top:8px"><button type="button" class="btn small" id="edMove" hidden>One of these is a parallel</button><button type="button" class="btn small" id="edParAdd" aria-expanded="false">✦ Add a parallel</button></div>
+      <div class="parpick" id="edParPick" hidden><p class="help" id="edPickWhat" style="margin:0 0 6px"></p>${parPicker()}</div>
+    </div>
+    <div class="sheet-actions"><button type="button" class="btn" id="edNeed">Set normal to 0 (need it)</button><button type="button" class="btn primary" data-close>Done</button></div>`, root => {
+      let moving = false;
+      const q = sel => root.querySelector(sel);
+      const showPars = () => {
+        const list = parsOf(activeDoc(), id);
+        q('#edPars').innerHTML = list.length ? list.map(({ code, n }) => { const p = PAR_BY_CODE[code]; return `<div class="edpar"><span class="pdot" style="background:${p.col}"></span><b>${esc(p.name)}</b><span class="ministep"><button type="button" data-parm="${code}" aria-label="One fewer ${esc(p.name)}">−</button><output>${n}</output><button type="button" data-parp="${code}" aria-label="One more ${esc(p.name)}">+</button></span></div>`; }).join('') : '<small class="muted">None yet.</small>';
+      };
       const show = () => {
         const n = cnt(activeDoc(), id);
-        root.querySelector('#edCount').textContent = n;
-        root.querySelector('#edLabel').textContent = copiesLabel(n);
-        root.querySelector('#edMinus').disabled = n === 0;
+        q('#edCount').textContent = n;
+        q('#edLabel').textContent = copiesLabel(n);
+        q('#edMinus').disabled = n === 0;
+        q('#edMove').hidden = n === 0;
+        q('#edMove').textContent = n > 1 ? 'One of these is a parallel' : "This one's a parallel";
+        showPars();
       };
+      const closePick = () => { q('#edParPick').hidden = true; q('#edParAdd').setAttribute('aria-expanded', 'false'); moving = false; };
+      const openPick = move => {
+        moving = move;
+        q('#edPickWhat').textContent = move ? 'Which parallel is it? It moves off your normal count.' : 'Which parallel?';
+        q('#edParPick').hidden = false; q('#edParAdd').setAttribute('aria-expanded', 'true');
+        const first = q('#edParPick .pchip'); if (first) first.focus({ preventScroll: true });
+        q('#edParPick').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      };
+      const save = prev => { S.undo = { pid: S.activeId, prev }; scheduleSave(S.activeId); updateTile(id, false); renderSummary(); renderBadges(); show(); };
       const setTo = n => {
         n = Math.max(0, Math.min(99, n));
         const doc = mutable(S.activeId);
         if (n > 0) doc.counts[id] = n; else delete doc.counts[id];
-        S.undo = { pid: S.activeId, prev: { [id]: start } };
-        scheduleSave(S.activeId); updateTile(id, false); renderSummary(); renderBadges(); show();
+        save({ [id]: start });
       };
-      root.querySelector('#edMinus').addEventListener('click', () => setTo(cnt(activeDoc(), id) - 1));
-      root.querySelector('#edPlus').addEventListener('click', () => setTo(cnt(activeDoc(), id) + 1));
-      root.querySelector('#edNeed').addEventListener('click', () => setTo(0));
+      const setPar = (code, n) => {
+        const doc = mutable(S.activeId), k = parKey(id, code), before = cnt(doc, k);
+        n = Math.max(0, Math.min(99, n));
+        if (n > 0) doc.counts[k] = n; else delete doc.counts[k];
+        save({ [k]: before });
+      };
+      q('#edMinus').addEventListener('click', () => setTo(cnt(activeDoc(), id) - 1));
+      q('#edPlus').addEventListener('click', () => setTo(cnt(activeDoc(), id) + 1));
+      q('#edNeed').addEventListener('click', () => setTo(0));
+      q('#edParWrap').addEventListener('click', e => {
+        const pick = e.target.closest('[data-pickpar]');
+        if (pick){
+          const code = pick.dataset.pickpar, doc = mutable(S.activeId), k = parKey(id, code);
+          const prev = { [k]: cnt(doc, k) };
+          if (moving && cnt(doc, id) > 0){ prev[id] = cnt(doc, id); const n = cnt(doc, id) - 1; if (n > 0) doc.counts[id] = n; else delete doc.counts[id]; }
+          doc.counts[k] = Math.min(99, cnt(doc, k) + 1);
+          closePick(); save(prev);
+          return;
+        }
+        const m = e.target.closest('[data-parm]'); if (m){ setPar(m.dataset.parm, cnt(activeDoc(), parKey(id, m.dataset.parm)) - 1); return; }
+        const pl = e.target.closest('[data-parp]'); if (pl){ setPar(pl.dataset.parp, cnt(activeDoc(), parKey(id, pl.dataset.parp)) + 1); return; }
+        if (e.target.closest('#edMove')){ openPick(true); return; }
+        if (e.target.closest('#edParAdd')){ if (!q('#edParPick').hidden && !moving) closePick(); else openPick(false); }
+      });
       show();
     });
 }
@@ -3122,7 +3268,7 @@ function openSettings(){
     <label class="f">Cards I'm collecting</label>
     <p class="help" style="margin-top:0">Your needs only count cards in these sets. Most people collect the base set; tick insert sets you're chasing too.</p>
     <div class="setchips">${setChips}</div>
-    <label class="f" for="setOther">Other swaps (parallels, autographs, numbered cards)</label>
+    <label class="f" for="setOther">Other swaps (autographs, relics, anything not on the list)</label>
     <textarea id="setOther" rows="3" maxlength="400" placeholder="e.g. Palmer green /99, Saka PL parallel" ${editable ? '' : 'disabled'}>${esc(d.other || '')}</textarea>
     <label class="toggle" style="border-top:0;padding-top:0"><input type="checkbox" id="setSound" ${soundOn() ? 'checked' : ''}><span><b>Sounds</b><br><small class="muted">The swoosh when cards are swapped, and the crowd on the kick-off screen. This phone only.</small></span></label>
     <label class="toggle"><input type="checkbox" id="setKick" ${store.get('kickoff') !== 'off' ? 'checked' : ''}><span><b>Kick-off screen</b><br><small class="muted">Flick a ball into the net each time you open the app. This phone only.</small></span></label>
@@ -3234,6 +3380,7 @@ function openFriend(id){
     <p class="meta">Base ${st.base}/300 · ${st.ins} inserts · ${p.demo ? 'demo' : ago(p.updatedAt)}</p>
     <h4 style="margin-top:14px">Swaps · ${sw.length}${me && p.id !== S.activeId ? ' <small>(green outline = you need it)</small>' : ''}</h4>${swChips}
     <h4 style="margin-top:14px">Needs${p.complete ? ' · ' + needs.length : ''}${me && p.id !== S.activeId && p.complete ? ' <small>(green outline = you have a spare)</small>' : ''}</h4>${needChips}
+    ${allPars(p).length ? `<h4 style="margin-top:14px">✦ Parallels · ${st.par}</h4><div class="chips">${allPars(p).map(x => parChip(BY_ID.get(x.id), x.code, x.n)).join('')}</div>` : ''}
     ${p.other ? `<h4 style="margin-top:14px">Other swaps</h4><p>${esc(p.other)}</p>` : ''}
     ${ownerTools}`, root => {
       const b = root.querySelector('#fEdit');
@@ -3539,6 +3686,11 @@ $('#keypad').addEventListener('click', e => { const k = e.target.closest('[data-
 $('#padLog').addEventListener('click', e => { if (e.target.closest('#padUndo')){ undo(); S.padLog.shift(); renderPadLog(false); } });
 $('#padSet').innerHTML = `<option value="base">Base 1–300</option>` + SETS.map(s => `<option value="${s.code}">${esc(s.code)} · ${esc(s.name)}</option>`).join('');
 $('#padSet').addEventListener('change', e => { S.padSet = e.target.value; S.padBuf = ''; renderPad(); });
+S.padPar = false;
+S.padParType = PAR_BY_CODE[store.get('parType')] ? store.get('parType') : 'P';
+$('#padParType').innerHTML = PAR_GROUPS.map(([g, label]) => `<optgroup label="${esc(label)}">${PARALLELS.filter(p => p.group === g).map(p => `<option value="${p.code}">${esc(p.name)}${p.where ? ' · ' + esc(p.where) : ''}</option>`).join('')}</optgroup>`).join('');
+$('#padPar').addEventListener('click', () => { S.padPar = !S.padPar; renderPad(); });
+$('#padParType').addEventListener('change', e => { S.padParType = e.target.value; store.set('parType', S.padParType); renderPad(); });
 document.addEventListener('keydown', e => {
   if (S.tab !== 'cards' || S.addMode !== 'pad' || !$('#sheet').hidden) return;
   const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
@@ -3603,17 +3755,20 @@ $('#summary').addEventListener('click', e => {
   if (e.target.closest('#copyMine')){
     const d = activeDoc(); if (!d) return;
     const sw = ALL.filter(c => cnt(d, c.id) > 1).map(c => c.id + (cnt(d, c.id) > 2 ? ' x' + (cnt(d, c.id) - 1) : ''));
-    if (!sw.length){ toast('No swaps on your list yet'); return; }
-    copyText(`${d.nick}'s swaps · Topps Premier League 26/27\n${sw.join(', ')}`, 'Swaps list copied');
+    const ps = allPars(d).filter(x => x.n > 1).map(x => `${x.id} ${PAR_BY_CODE[x.code].short}${x.n > 2 ? ' x' + (x.n - 1) : ''}`);
+    if (!sw.length && !ps.length){ toast('No swaps on your list yet'); return; }
+    copyText([`${d.nick}'s swaps · Topps Premier League 26/27`].concat(sw.length ? [sw.join(', ')] : [], ps.length ? ['Parallel swaps: ' + ps.join(', ')] : []).join('\n'), 'Swaps list copied');
   }
   if (e.target.closest('#openSettings')) openSettings();
   if (e.target.closest('#joinBtn')) openJoin();
   if (e.target.closest('#joinBtnWeb')) openWelcome();
   if (e.target.closest('#goToSwap')){ S.tab = 'swaps'; store.set('tab', 'swaps'); renderAll(); const t = $('#toSwapPanel'); if (t) t.scrollIntoView({ block: 'start' }); }
-  if (e.target.closest('#showSwaps')){
-    S.section = 'all'; S.filter = 'swap'; S.query = '';
+  const showF = e.target.closest('#showSwaps,#showPars');
+  if (showF){
+    const f = showF.id === 'showPars' ? 'par' : 'swap';
+    S.section = 'all'; S.filter = f; S.query = '';
     $('#section').value = 'all'; $('#search').value = '';
-    document.querySelectorAll('[data-filter]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.filter === 'swap')));
+    document.querySelectorAll('[data-filter]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.filter === f)));
     renderGrid();
     $('#browse').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   }
@@ -3634,8 +3789,8 @@ $('#addPanel').addEventListener('click', e => {
     const changed = applyItems(items, add.dataset.aiadd);
     if (changed){
       $('#aiReply').value = ''; renderAiPreview(); renderAll();
-      const sw = sp ? sp.spare.reduce((a, b) => a + b.n, 0) : 0;
-      showUndoToast(sp ? 'Added ' + [sp.keep.length ? `${plural(sp.keep.length, 'new card')} to your collection` : '', sw ? plural(sw, 'swap') : ''].filter(Boolean).join(' and ') : `${plural(changed, 'card')} updated`);
+      const sw = sp ? sp.spare.reduce((a, b) => a + b.n, 0) : 0, pn = sp ? sp.par.reduce((a, b) => a + b.n, 0) : 0;
+      showUndoToast(sp ? 'Added ' + andList([sp.keep.length ? `${plural(sp.keep.length, 'new card')} to your collection` : '', sw ? plural(sw, 'swap') : '', pn ? plural(pn, 'parallel') : '']) : `${plural(changed, 'card')} updated`);
     }
   }
 });
@@ -3864,7 +4019,7 @@ async function init(){
   renderAll();
   subscribe();
 }
-window.__ggn = { celebrate, cardArt, aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor };
+window.__ggn = { celebrate, cardArt, aiPrompt, aiSource, parseEntry, applyToCounts, computeMatch, rankMatches, shortName, ALL, BY_ID, SETS, normaliseScan, stats, sanitize, settleSent, settleReceived, applyHandover, toStore, pendingFor, allPars, parsOf, splitAdd, PARALLELS };
 init();
 })();
 </script>
