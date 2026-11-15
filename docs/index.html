@@ -247,6 +247,9 @@ button.chip.pick:active{transform:scale(.96)}
 .pill.off{border-color:transparent;background:var(--bad);color:var(--surface)}
 .scanlist .pt{margin-left:auto;padding-left:8px;white-space:nowrap;font-weight:700;color:var(--muted);font-size:12px}
 .gifttag{display:inline-block;margin-left:4px}
+.grow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.panel h2 + .grow,.panel h2 + p + .grow{border-top:0}
+.grow .t{min-width:0}
 
 /* parallels */
 .pdot{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);vertical-align:-1px}
@@ -597,6 +600,10 @@ try {
 
   const hello = ls.get('hello');
   if (hello) $k('kickHi').textContent = 'Welcome back, ' + hello;
+  try {
+    const u = new URL(location.href), gn = (u.searchParams.get('gn') || '').replace(/\s+/g, ' ').trim().slice(0, 24);
+    if (u.searchParams.get('g') && gn) $k('kickHi').textContent = "You're invited to " + gn;
+  } catch (e) {}
   const fine = !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches);
   const HINT = RM ? 'Tap the ball to kick off' : fine ? 'Drag and flick the ball into the net' : 'Flick the ball into the net to kick off';
   hintEl.textContent = HINT;
@@ -1959,14 +1966,25 @@ function balancedPick(getC, giveC){
   return { get: new Set(a.get(top).map(i => getC[i].id)), give: new Set(b.get(top).map(i => giveC[i].id)) };
 }
 /* Swap settings live in the doc's scope list as one "pref:{...}" entry, so the database rules don't change. */
+const GROUP_ID = /^[a-z0-9]{6,10}$/;
+function cleanGroups(a){
+  const out = [];
+  if (Array.isArray(a)) for (const g of a){
+    const id = Array.isArray(g) ? g[0] : g && g.id, name = Array.isArray(g) ? g[1] : g && g.name;
+    if (typeof id === 'string' && GROUP_ID.test(id) && !out.some(x => x.id === id)) out.push({ id, name: cleanName(name) || 'Swap group' });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
 function readPrefs(list){
-  const out = { teams: [], fair: false, gift: false };
+  const out = { teams: [], fair: false, gift: false, groups: [] };
   const e = (Array.isArray(list) ? list : []).find(x => typeof x === 'string' && x.startsWith('pref:'));
   if (!e) return out;
   try {
     const j = JSON.parse(e.slice(5));
     if (Array.isArray(j.t)) out.teams = j.t.filter(k => typeof k === 'string' && CLUBS[k]).slice(0, 6);
     out.fair = !!j.f; out.gift = !!j.g;
+    out.groups = cleanGroups(j.gr);
   } catch {}
   return out;
 }
@@ -1975,6 +1993,7 @@ function prefScope(d){
   if (d.teams && d.teams.length) j.t = d.teams.slice(0, 6);
   if (d.fair) j.f = 1;
   if (d.gift) j.g = 1;
+  if (d.groups && d.groups.length) j.gr = d.groups.slice(0, 5).map(g => [g.id, g.name]);
   return Object.keys(j).length ? ['pref:' + JSON.stringify(j)] : [];
 }
 const isFav = (p, c) => !!(p && p.teams && c && p.teams.includes(c.club));
@@ -2081,6 +2100,7 @@ function applyToCounts(counts, items, mode, collects){
     else if (mode === 'got') a = Math.max(b, n);
     else if (mode === 'swap') a = Math.max(b, 1) + n;
     else if (mode === 'add') a = (b === 0 && (!collects || collects(id))) ? n : Math.max(b, 1) + n;
+    else if (mode === 'count') a = b + n;   // Got it, typed or punched in: every copy counts
     else a = Math.max(0, b - n);
     a = Math.min(a, 99);
     if (a !== b){
@@ -2194,7 +2214,7 @@ const S = {
   activeId: null, demo: false, demoPlayers: [],
   tab: 'cards', addMode: 'pad', mode: 'swap', section: 'base', filter: 'all', query: '',
   padSet: 'base', padBuf: '', padLog: [], undo: null, onboardAsked: false, expanded: new Set(), seenIncoming: null, seenAgreed: null,
-  platform: 'none', fb: null, authUser: null, adminUid: null, unsub: null, welcomeOpen: false
+  platform: 'none', fb: null, authUser: null, adminUid: null, unsub: null, welcomeOpen: false, groupFilter: 'all'
 };
 const isWeb = () => S.platform === 'firebase';
 const EMPTY = { counts: {}, scope: ['base'], complete: false, nick: '', adult: '', child: '', full: '' };
@@ -2291,7 +2311,7 @@ function toStore(d){
     }))
   };
 }
-function newDoc(id, adult, child){ return setNames({ id, counts: {}, complete: false, scope: ['base'], teams: [], fair: false, gift: false, other: '', managed: false, updatedAt: 0, offers: [], replies: {} }, adult || 'Friend', child); }
+function newDoc(id, adult, child){ return setNames({ id, counts: {}, complete: false, scope: ['base'], teams: [], fair: false, gift: false, groups: [], other: '', managed: false, updatedAt: 0, offers: [], replies: {} }, adult || 'Friend', child); }
 function getDoc(id){
   if (!id) return null;
   if (S.local[id]) return S.local[id];
@@ -2311,7 +2331,56 @@ function allPlayers(){
   if (S.demo) list.push(...S.demoPlayers);
   return list;
 }
-function friendsOf(id){ return allPlayers().filter(p => p.id !== id && p.id !== 'local'); }
+/* Swap groups: you see people who share a group with you; people in no group see each other (the open group).
+   They keep everyone's lists tidy, they aren't a privacy wall: names and lists can still be read by anyone signed in. */
+const groupIds = p => (p && Array.isArray(p.groups) ? p.groups.map(g => g.id) : []);
+function sameGroup(a, b){ const ga = groupIds(a), gb = groupIds(b); return (!ga.length && !gb.length) || ga.some(id => gb.includes(id)); }
+function groupName(id){ for (const p of allPlayers()) for (const g of p.groups || []) if (g.id === id) return g.name; return ''; }
+function groupMembers(id){ return allPlayers().filter(p => !p.demo && groupIds(p).includes(id)); }
+const inviteLink = g => `${location.origin}${location.pathname}?g=${g.id}&gn=${encodeURIComponent(g.name)}`;
+const inviteText = g => `Join our card swap group "${g.name}" on Got Got Need: ${inviteLink(g)}`;
+const newGroupId = () => { let x = ''; while (x.length < 8) x += Math.random().toString(36).slice(2); return x.slice(0, 8); };
+function friendsOf(id){
+  const me = getDoc(id);
+  const gf = S.groupFilter && S.groupFilter !== 'all' && groupIds(me).includes(S.groupFilter) ? S.groupFilter : null;
+  return allPlayers().filter(p => p.id !== id && p.id !== 'local' && (p.demo || (sameGroup(me, p) && (!gf || groupIds(p).includes(gf)))));
+}
+/* An invite link (?g=code&gn=name) is remembered for this visit and used once the person is in. */
+(() => {
+  try {
+    const u = new URL(location.href), id = (u.searchParams.get('g') || '').toLowerCase();
+    if (!GROUP_ID.test(id)) return;
+    sessionStorage.setItem('ggn.invite', JSON.stringify({ id, name: cleanName(u.searchParams.get('gn') || '') }));
+    u.searchParams.delete('g'); u.searchParams.delete('gn');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);
+  } catch {}
+})();
+function pendingInvite(){
+  try { const j = JSON.parse(sessionStorage.getItem('ggn.invite') || 'null'); return j && GROUP_ID.test(j.id) ? { id: j.id, name: cleanName(j.name) } : null; } catch { return null; }
+}
+function applyInvite(){
+  const inv = pendingInvite(); if (!inv || !S.uid || !S.loaded) return;
+  const me = getDoc(S.uid); if (!me) return;
+  try { sessionStorage.removeItem('ggn.invite'); } catch {}
+  const name = inv.name || groupName(inv.id) || 'Swap group';
+  if (groupIds(me).includes(inv.id)){ toast(`You're in ${name}`); return; }
+  joinGroup({ id: inv.id, name });
+  toast(`You've joined ${name}. Everyone in it shows up in Friends and Swaps.`);
+}
+function joinGroup(g){
+  const add = pid => { const d = mutable(pid); if (groupIds(d).includes(g.id)) return; d.groups = (d.groups || []).concat([g]).slice(-5); scheduleSave(pid); };
+  add(S.uid);
+  if (S.isOwner) for (const p of allPlayers()) if (p.managed && !p.demo) add(p.id);   // lists you keep come with you
+  S.groupFilter = 'all';
+  renderAll();
+}
+function leaveGroup(gid){
+  const drop = pid => { const d = mutable(pid); if (!groupIds(d).includes(gid)) return; d.groups = d.groups.filter(x => x.id !== gid); scheduleSave(pid); };
+  drop(S.uid);
+  if (S.isOwner) for (const p of allPlayers()) if (p.managed && !p.demo) drop(p.id);
+  if (S.groupFilter === gid) S.groupFilter = 'all';
+  renderAll();
+}
 function activeDoc(){ return getDoc(S.activeId); }
 function canWriteActive(){
   if (!S.activeId) return false;
@@ -2810,7 +2879,7 @@ function renderModes(){
   go.classList.toggle('swap', S.mode === 'swap');
   go.classList.toggle('remove', S.mode === 'remove');
   go.textContent = S.padPar ? (S.mode === 'remove' ? 'Remove ✦' : 'Add ✦') : S.mode === 'got' ? 'Got it' : S.mode === 'swap' ? '+ Swap' : 'Remove';
-  $('#entryBtn').textContent = S.mode === 'got' ? 'Add as got' : S.mode === 'swap' ? 'Add swaps' : 'Remove';
+  $('#entryBtn').textContent = S.mode === 'got' ? 'Add' : S.mode === 'swap' ? 'Add swaps' : 'Remove';
 }
 function renderAddMode(){
   document.querySelectorAll('[data-am]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.am === S.addMode)));
@@ -2857,7 +2926,7 @@ function padPress(k){
     const c = padCard(); if (!c) return;
     const par = S.padPar ? (PAR_BY_CODE[S.padParType] || PAR_BY_CODE.P) : null;
     const key = par ? parKey(c.id, par.code) : c.id;
-    const changed = applyItems([{ id: key, n: 1 }], S.mode);
+    const changed = applyItems([{ id: key, n: 1 }], S.mode === 'got' ? 'count' : S.mode);
     S.padPar = false;   // one at a time: the next card is a normal one again
     if (changed){
       const n = cnt(activeDoc(), key);
@@ -3021,6 +3090,11 @@ function renderSwaps(){
     return;
   }
   const friends = friendsOf(S.activeId);
+  const mineG = getDoc(S.uid);
+  if (!friends.length && mineG && groupIds(mineG).length){
+    el.innerHTML = groupFilterHTML(mineG) + `<div class="panel empty"><h2>Nobody else in your group yet</h2><p>Go to <b>Friends</b>, tap <b>Copy invite</b> and send it in your WhatsApp group. Friends who open it join, and show up here.</p></div>`;
+    return;
+  }
   if (!friends.length){
     el.innerHTML = `<div class="panel empty"><h2>No friends here yet</h2>
       <ol class="steps"><li>Everyone adds their swaps, and ticks off the cards they've got.</li><li>Each person switches on <b>Show friends what I need</b>.</li><li>This tab then lists who to swap with, and which cards.</li><li>Tap a card to send a swap request. Once it's accepted it goes on your To swap list, and your cards update when you mark it as swapped.</li></ol>
@@ -3029,7 +3103,7 @@ function renderSwaps(){
     return;
   }
   const matches = rankMatches(me, friends);
-  let html = '';
+  let html = groupFilterHTML(mineG);
   const inc = incomingFor(S.activeId);
   if (inc.length) html += incomingHTML(me, inc);
   const pend = pendingFor(S.activeId);
@@ -3136,11 +3210,29 @@ function outgoingHTML(outg){
     return `<div class="orow"><div><b>${esc(name)}</b> · ${esc(state)}<br><small class="muted">You get ${esc(o.get.join(', ') || 'nothing')} · you give ${esc(o.give.join(', ') || 'nothing')}</small></div>${o.st === 'open' && !reply ? `<button type="button" class="linkbtn" data-cancel="${esc(o.id)}">Cancel</button>` : ''}</div>`;
   }).join('')}</div>`;
 }
+function groupsPanelHTML(mine){
+  const gs = mine.groups || [];
+  let h = `<div class="panel" id="groupsPanel"><h2>${gs.length > 1 ? 'Your groups' : gs.length ? 'Your group' : 'Swap groups'}</h2>`;
+  if (!gs.length) h += `<p>You're in the open group: everyone who hasn't joined a group sees each other. Start a group for your friends and share its link, so you only see each other.</p>`;
+  else h += gs.map(g => `<div class="grow"><div class="t"><b>${esc(g.name)}</b><br><small class="muted">${plural(groupMembers(g.id).length, 'person', 'people')} · code <b>${esc(g.id)}</b></small></div><div class="row wrap"><button type="button" class="btn small primary" data-ginvite="${esc(g.id)}">Copy invite</button><button type="button" class="btn small ghost" data-gleave="${esc(g.id)}">Leave</button></div></div>`).join('');
+  h += `<div class="sheet-actions"><button type="button" class="btn small${gs.length ? '' : ' primary'}" id="gNew">${gs.length ? 'Start another group' : 'Start a group'}</button><button type="button" class="btn small" id="gJoin">Join with a code</button></div>`;
+  if (gs.length) h += `<p class="help">Only people in your group${gs.length > 1 ? 's' : ''} show up in Friends and Swaps.</p>`;
+  return h + '</div>';
+}
+function groupFilterHTML(mine){
+  const gs = (mine && mine.groups) || [];
+  if (gs.length < 2) return '';
+  return `<div class="filters" role="group" aria-label="Which group" style="margin-top:12px">${[{ id: 'all', name: 'All my groups' }].concat(gs).map(g => `<button type="button" class="chipbtn" data-gfilter="${esc(g.id)}" aria-pressed="${S.groupFilter === g.id}">${esc(g.name)}</button>`).join('')}</div>`;
+}
 function renderFriends(){
   const el = $('#view-friends');
-  const players = allPlayers().slice().sort((a, b) => (a.id === S.uid ? -1 : b.id === S.uid ? 1 : 0) || (b.updatedAt - a.updatedAt));
+  const me0 = activeDoc(), mine = getDoc(S.uid);
+  const players = (me0 ? [me0].concat(friendsOf(S.activeId)) : allPlayers()).sort((a, b) => (a.id === S.uid ? -1 : b.id === S.uid ? 1 : 0) || (b.updatedAt - a.updatedAt));
   let html = '';
-  if (S.isOwner && isWeb()){
+  if (isWeb() && mine) html += groupsPanelHTML(mine);
+  if (S.isOwner && isWeb() && mine && groupIds(mine).length){
+    html += `<div class="panel"><h2>Lists you keep</h2><p class="help" style="margin-top:0">Keep a list for someone who doesn't use the app. Lists you keep are in your groups too.</p><div class="sheet-actions"><button type="button" class="btn small" id="addManaged">Keep a list for someone</button></div></div>`;
+  } else if (S.isOwner && isWeb()){
     const link = location.origin + location.pathname;
     html += `<div class="panel"><h2>Invite friends</h2>
       <p>Send this link in your WhatsApp group:</p><span class="linkbox">${esc(link)}</span>
@@ -3157,7 +3249,11 @@ function renderFriends(){
     el.innerHTML = html; return;
   }
   const me = activeDoc();
-  html += `<div class="panel"><h2>The swap group · ${players.filter(p => !p.demo).length}</h2>`;
+  const gsel = S.groupFilter !== 'all' && mine ? (mine.groups || []).find(g => g.id === S.groupFilter) : null;
+  const heading = gsel ? gsel.name : mine && mine.groups && mine.groups.length === 1 ? mine.groups[0].name : mine && mine.groups && mine.groups.length ? 'Your groups' : 'The swap group';
+  html += groupFilterHTML(mine);
+  html += `<div class="panel"><h2>${esc(heading)} · ${players.filter(p => !p.demo).length}</h2>`;
+  if (players.filter(p => !p.demo).length < 2 && mine && mine.groups && mine.groups.length) html += `<p class="help">Nobody else here yet. Tap <b>Copy invite</b> above and send it in your WhatsApp group.</p>`;
   for (const p of players){
     const st = stats(p);
     const m = me && p.id !== S.activeId ? computeMatch(me, p) : null;
@@ -3256,6 +3352,7 @@ function openJoin(){
           S.tab = 'cards'; store.set('tab', 'cards');
           renderAll(); window.scrollTo(0, 0);
           toast("You're in. Start adding cards.");
+          applyInvite();
         } else {
           delete S.local[S.uid];
           const err = root.querySelector('#joinErr');
@@ -3451,6 +3548,52 @@ function switchProfile(id){
   closeSheet(); renderAll();
   toast(`Now editing ${getDoc(id).nick}'s cards`);
 }
+function openNewGroup(){
+  if (!S.uid || !getDoc(S.uid)){ needJoin(); return; }
+  openSheet(`<h2 id="sheetTitle">Start a swap group</h2>
+    <p>Give it a name your friends will know, like the class or the club. Then share its link: only people who open it join, and you'll only see each other.</p>
+    <label class="f" for="gName">Group name</label>
+    <input type="text" id="gName" maxlength="24" placeholder="e.g. Year 5 swaps">
+    <p class="flag" id="gErr" hidden></p>
+    <div class="sheet-actions"><button type="button" class="btn primary" id="gGo">Create group</button></div>`, root => {
+      const go = () => {
+        const name = cleanName(root.querySelector('#gName').value);
+        if (!name){ const er = root.querySelector('#gErr'); er.hidden = false; er.textContent = 'Give the group a name first.'; root.querySelector('#gName').focus(); return; }
+        const g = { id: newGroupId(), name };
+        joinGroup(g);
+        openSheet(`<h2 id="sheetTitle">${esc(name)} is ready</h2>
+          <p>Send this in your WhatsApp group. Friends who open the link join ${esc(name)}.</p>
+          <span class="linkbox">${esc(inviteLink(g))}</span>
+          <p class="help">Or they can tap <b>Join with a code</b> in Friends and type <b>${esc(g.id)}</b>.</p>
+          <div class="sheet-actions"><button type="button" class="btn primary" id="gCopy">Copy invite</button><button type="button" class="btn" data-close>Done</button></div>`, r2 => {
+            r2.querySelector('#gCopy').addEventListener('click', () => copyText(inviteText(g), 'Invite copied. Paste it into WhatsApp.'));
+          });
+      };
+      root.querySelector('#gGo').addEventListener('click', go);
+      root.querySelector('#gName').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    });
+}
+function openJoinGroup(){
+  if (!S.uid || !getDoc(S.uid)){ needJoin(); return; }
+  openSheet(`<h2 id="sheetTitle">Join a group</h2>
+    <p>Type the code from whoever started the group. It's in their invite message too.</p>
+    <label class="f" for="gCode">Group code</label>
+    <input type="text" id="gCode" maxlength="12" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="e.g. k3x9p2ab">
+    <p class="flag" id="gErr" hidden></p>
+    <div class="sheet-actions"><button type="button" class="btn primary" id="gGo">Join</button></div>`, root => {
+      const go = () => {
+        const id = root.querySelector('#gCode').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const err = t => { const er = root.querySelector('#gErr'); er.hidden = false; er.textContent = t; };
+        if (!GROUP_ID.test(id)) return err("That doesn't look like a group code. It's 8 letters and numbers.");
+        if (groupIds(getDoc(S.uid)).includes(id)) return err("You're already in that group.");
+        const name = groupName(id);
+        if (!name) return err('No group with that code. Check it with whoever sent it.');
+        closeSheet(); joinGroup({ id, name }); toast(`You've joined ${name}`);
+      };
+      root.querySelector('#gGo').addEventListener('click', go);
+      root.querySelector('#gCode').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    });
+}
 function openAddManaged(){
   openSheet(`<h2 id="sheetTitle">${isWeb() ? 'Keep a list for someone' : "Add a friend who isn't on Claude"}</h2>
     <p>You'll keep their list for them, for example from a list they send you on WhatsApp. Everyone sees their swaps.</p>
@@ -3465,6 +3608,7 @@ function openAddManaged(){
         root.querySelector('#mGo').disabled = true;
         const id = 'm-' + Math.random().toString(36).slice(2, 10);
         const doc = newDoc(id, adult, child); doc.managed = true;
+        doc.groups = ((getDoc(S.uid) || {}).groups || []).map(g => ({ ...g }));
         S.local[id] = doc; S.dirty.add(id);
         const ok = await flush(id);
         if (ok){ S.tab = 'cards'; store.set('tab', 'cards'); S.addMode = 'list'; switchProfile(id); window.scrollTo(0, 0); }
@@ -3865,8 +4009,12 @@ $('#entryForm').addEventListener('submit', e => {
   e.preventDefault();
   const { items } = parseEntry($('#entry').value);
   if (!items.length) return;
-  const changed = applyItems(items, S.mode);
-  if (changed){ $('#entry').value = ''; renderAll(); showUndoToast(`${plural(changed, 'card')} updated`); }
+  const d0 = activeDoc() || EMPTY;
+  const fresh = S.mode === 'got' ? items.filter(it => !String(it.id).includes('~') && cnt(d0, it.id) === 0).length : 0;
+  const extra = S.mode === 'got' ? items.reduce((t, it) => t + (String(it.id).includes('~') ? 0 : it.n - (cnt(d0, it.id) === 0 ? 1 : 0)), 0) : 0;
+  const changed = applyItems(items, S.mode === 'got' ? 'count' : S.mode);
+  const said = S.mode === 'got' ? andList([fresh ? `${plural(fresh, 'new card')} to your collection` : '', extra ? plural(extra, 'swap') : '']) : '';
+  if (changed){ $('#entry').value = ''; renderAll(); showUndoToast(said ? 'Added ' + said : `${plural(changed, 'card')} updated`); }
 });
 $('#section').innerHTML = sectionOptions();
 $('#section').addEventListener('change', e => { S.section = e.target.value; S.query = ''; $('#search').value = ''; renderGrid(); });
@@ -3959,6 +4107,7 @@ $('#addPanel').addEventListener('click', e => {
 $('#addPanel').addEventListener('input', e => { if (e.target.id === 'aiReply') renderAiPreview(); });
 $('#photoInput').addEventListener('change', () => { const f = $('#photoInput').files[0]; $('#photoInput').value = ''; if (f) startScan(f); });
 $('#view-swaps').addEventListener('click', e => {
+  if (groupClicks(e)) return;
   const ak = e.target.closest('[data-ask]'); if (ak){ openOffer(ak.dataset.ask, { [ak.dataset.side]: [ak.dataset.card] }); return; }
   const ct = e.target.closest('[data-counter]'); if (ct){ openCounter(ct.dataset.counter, ct.dataset.oid); return; }
   const of = e.target.closest('[data-offer]'); if (of){ openOffer(of.dataset.offer); return; }
@@ -3980,7 +4129,22 @@ $('#view-swaps').addEventListener('click', e => {
   if (e.target.closest('#demoOff')){ S.demo = false; S.demoPlayers = []; renderAll(); return; }
   if (e.target.closest('#joinBtn2')){ if (isWeb() && !S.uid) openWelcome(); else openJoin(); }
 });
+function groupClicks(e){
+  const gi = e.target.closest('[data-ginvite]');
+  if (gi){ const g = ((getDoc(S.uid) || {}).groups || []).find(x => x.id === gi.dataset.ginvite); if (g) copyText(inviteText(g), 'Invite copied. Paste it into WhatsApp.'); return true; }
+  const gl = e.target.closest('[data-gleave]');
+  if (gl){
+    if (gl.dataset.armed !== '1'){ gl.dataset.armed = '1'; gl.textContent = 'Tap again to leave'; return true; }
+    leaveGroup(gl.dataset.gleave); toast('You left the group'); return true;
+  }
+  if (e.target.closest('#gNew')){ openNewGroup(); return true; }
+  if (e.target.closest('#gJoin')){ openJoinGroup(); return true; }
+  const gf = e.target.closest('[data-gfilter]');
+  if (gf){ S.groupFilter = gf.dataset.gfilter; renderAll(); return true; }
+  return false;
+}
 $('#view-friends').addEventListener('click', e => {
+  if (groupClicks(e)) return;
   const f = e.target.closest('[data-friend]'); if (f){ openFriend(f.dataset.friend); return; }
   if (e.target.closest('#addManaged')) openAddManaged();
   if (e.target.closest('#copyInvite')) copyText(location.origin + location.pathname, 'Link copied. Paste it into WhatsApp.');
@@ -4023,8 +4187,9 @@ function authErrorText(e){
 function openWelcome(){
   if (!isWeb() || S.uid || S.status === 'noconfig') return;
   if (S.welcomeOpen && !$('#sheet').hidden) return;
-  openSheet(`<h2 id="sheetTitle">Join the swap group</h2>
-    <p>Swap Topps Premier League 2026/27 cards with your friends. Add your swaps, and it shows who to swap with.</p>
+  const inv = pendingInvite();
+  openSheet(`<h2 id="sheetTitle">${inv ? `Join ${esc(inv.name || 'the swap group')}` : 'Join the swap group'}</h2>
+    <p>${inv ? `You've been invited to ${esc(inv.name ? `the ${inv.name} swap group` : 'a swap group')}. ` : ''}Swap Topps Premier League 2026/27 cards with your friends. Add your swaps, and it shows who to swap with.</p>
     <div class="stack">
       <button type="button" class="btn primary" id="wGoogle">Continue with Google</button>
       <small class="muted">Your list follows you to any phone.</small>
@@ -4142,7 +4307,7 @@ function subscribe(){
     if (!snap.metadata || !snap.metadata.fromCache){ S.loaded = true; S.slow = false; clearTimeout(slowTimer); }
     S.status = 'ready';
     renderAll();
-    if (S.loaded){ noticeIncoming(); scheduleSettle(); }
+    if (S.loaded){ noticeIncoming(); scheduleSettle(); applyInvite(); }
     if (S.loaded && S.uid && !getDoc(S.uid) && !S.readOnly && !S.onboardAsked){ S.onboardAsked = true; openJoin(); }
   }, err => {
     clearTimeout(slowTimer);
