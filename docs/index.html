@@ -342,7 +342,7 @@ button.chip.pick:active{transform:scale(.96)}
 .sheet-card h2{font-size:21px;margin-bottom:6px;padding-right:44px}
 .sheet-card p{margin:6px 0}
 .sheet-card label.f{display:block;margin:12px 0 4px;font-weight:700;font-size:13px}
-.sheet-card input[type=text],.sheet-card textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px}
+.sheet-card input[type=text],.sheet-card input[type=email],.sheet-card input[type=password],.sheet-card textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px}
 .sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .sheet.page .sheet-card{height:100%;max-height:none;border-radius:0;padding-top:32px}
 @media (min-width:640px){.sheet.page .sheet-card{height:auto;max-height:90%;border-radius:14px}}
@@ -355,6 +355,9 @@ button.chip.pick:active{transform:scale(.96)}
 .scanlist label{display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer}
 .scanlist input{width:20px;height:20px}
 .flag{color:var(--bad);font-weight:700;font-size:12px}
+.pwrow{display:flex;gap:8px;align-items:center}
+.pwrow input{flex:1;min-width:0}
+#emForm .flag,#emForm .help{margin:10px 0 0}
 .setchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .setchips label{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);border-radius:16px;font-size:13px;cursor:pointer}
 .setchips input{margin:0}
@@ -1325,7 +1328,7 @@ if (root0){
 <div id="toast" class="toast" role="status" hidden><span id="toastMsg"></span><button type="button" id="toastUndo" hidden>Undo</button></div>
 <input type="file" id="photoInput" accept="image/*" hidden>
 
-<script src="vendor/firebase-12.19.0.js"></script>
+<script src="vendor/firebase-12.19.0-2.js"></script>
 <script src="config.js"></script>
 <script>
 (() => {
@@ -3777,16 +3780,18 @@ function openSettings(){
     </div>
     <p class="flag" id="confirmMsg" hidden></p>
     ${isWeb() && S.authUser && S.activeId === S.uid ? `<h4 style="margin-top:18px">Your account</h4>
-      <p>${S.authUser.anon ? 'Using this phone only. If you lose this phone or clear the browser, your list goes with it.' : `Signed in with Google${S.authUser.name ? ' as ' + esc(S.authUser.name) : ''}.`}</p>
-      <div class="sheet-actions">${S.authUser.anon ? '<button type="button" class="btn small primary" id="linkGoogle">Keep my list safe with Google</button>' : ''}<button type="button" class="btn small" id="signOutBtn">Sign out</button></div>
+      <p>${S.authUser.anon ? 'Using this phone only. If you lose this phone or clear the browser, your list goes with it.' : S.authUser.google ? `Signed in with Google${S.authUser.name ? ' as ' + esc(S.authUser.name) : ''}.` : `Signed in with your email${S.authUser.email ? ' (' + esc(S.authUser.email) + ')' : ''}. Sign in with it on any phone.`}</p>
+      <div class="sheet-actions">${S.authUser.anon ? '<button type="button" class="btn small primary" id="linkGoogle">Keep my list safe with Google</button><button type="button" class="btn small primary" id="linkEmail">Keep it safe with my email</button>' : ''}<button type="button" class="btn small" id="signOutBtn">Sign out</button></div>
       <p class="flag" id="acctMsg" hidden></p>` : ''}`, root => {
       const lg = root.querySelector('#linkGoogle');
       if (lg) lg.addEventListener('click', () => linkGoogle(root));
+      const le = root.querySelector('#linkEmail');
+      if (le) le.addEventListener('click', () => openEmail(true));
       const so = root.querySelector('#signOutBtn');
       if (so) so.addEventListener('click', () => {
         if (S.authUser && S.authUser.anon && so.dataset.armed !== '1'){
           so.dataset.armed = '1'; so.textContent = 'Sign out anyway';
-          const m = root.querySelector('#acctMsg'); m.hidden = false; m.textContent = "You'll lose access to this list unless you keep it safe with Google first.";
+          const m = root.querySelector('#acctMsg'); m.hidden = false; m.textContent = "You'll lose access to this list unless you keep it safe with Google or your email first.";
           return;
         }
         S.fb.F.signOut(S.fb.auth).then(() => closeSheet()).catch(() => toast("Couldn't sign out"));
@@ -4533,7 +4538,7 @@ function authErrorText(e){
   if (c === 'auth/unauthorized-domain') return "This web address isn't allowed to sign in yet. Add it in Firebase under Authentication, Settings, Authorised domains.";
   if (c === 'auth/network-request-failed') return 'No connection. Check your signal and try again.';
   if (c === 'auth/credential-already-in-use') return 'That Google account already has its own list.';
-  if (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment' || c === 'auth/web-storage-unsupported') return "Your browser blocked the Google window. Open this link in Chrome or Safari (from WhatsApp: tap ⋯ then Open in browser), or choose Just use this phone.";
+  if (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment' || c === 'auth/web-storage-unsupported') return "Your browser blocked the Google window. Open this link in Chrome or Safari (from WhatsApp: tap ⋯ then Open in browser), or use your email instead.";
   return "Couldn't sign in. Try again, or open the link in your phone's browser.";
 }
 function openWelcome(){
@@ -4545,17 +4550,99 @@ function openWelcome(){
     <div class="stack">
       <button type="button" class="btn primary" id="wGoogle">Continue with Google</button>
       <small class="muted">Your list follows you to any phone.</small>
+      <button type="button" class="btn primary" id="wEmail">Use my email</button>
+      <small class="muted">No Google needed. Sign in on any phone with your email and a password.</small>
       <button type="button" class="btn" id="wAnon">Just use this phone</button>
       <small class="muted">No account needed. Your list stays on this phone.</small>
     </div>
     <p class="flag" id="wErr" hidden></p>`, root => {
       const err = e => { const m = root.querySelector('#wErr'); if (m){ m.hidden = false; m.textContent = authErrorText(e); } };
       root.querySelector('#wGoogle').addEventListener('click', () => googleSignIn(err));
+      root.querySelector('#wEmail').addEventListener('click', () => openEmail(false));
       root.querySelector('#wAnon').addEventListener('click', async () => {
         try { await S.fb.F.signInAnonymously(S.fb.auth); } catch (e){ err(e); }
       });
     });
   S.welcomeOpen = true;
+}
+/* Email and password: the no-Google way to have the same list on any phone. Free on Firebase's Spark plan
+   (no emails are sent except password resets). Needs Email/Password switched on in Firebase Authentication. */
+function emailErrText(e){
+  const c = e && e.code;
+  if (c === 'auth/invalid-email' || c === 'auth/missing-email') return "That doesn't look like an email address.";
+  if (c === 'auth/missing-password') return 'Type a password.';
+  if (c === 'auth/weak-password' || c === 'auth/password-does-not-meet-requirements') return 'Use at least 6 characters for your password.';
+  if (c === 'auth/email-already-in-use') return "There's already an account with that email. Tap Sign in instead.";
+  if (c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials' || c === 'auth/wrong-password' || c === 'auth/user-not-found') return "That email and password don't match. New here? Tap Create my account.";
+  if (c === 'auth/too-many-requests') return 'Too many tries. Wait a few minutes, then try again.';
+  if (c === 'auth/network-request-failed') return 'No connection. Check your internet and try again.';
+  if (c === 'auth/operation-not-allowed' || c === 'auth/admin-restricted-operation') return S.isOwner ? "Email sign-in isn't switched on yet. In Firebase, go to Authentication → Sign-in method and turn on Email/Password." : "Email sign-in isn't switched on yet. Ask the organiser to turn it on.";
+  if (c === 'auth/user-disabled') return 'This account has been switched off.';
+  return "Couldn't sign in. Try again.";
+}
+// link = true: an account that's only on this phone saves its list to an email (same list, now on any phone)
+function openEmail(link){
+  const { F, auth } = S.fb;
+  openSheet(`<h2 id="sheetTitle">${link ? 'Keep your list safe' : 'Use your email'}</h2>
+    <p>${link ? "Save this phone's list to your email. Then sign in with your email and password on any phone to get it back." : 'Sign in on any phone with your email and a password. No Google account needed.'}</p>
+    <form id="emForm" novalidate>
+      <label class="f" for="emAddr">Email</label>
+      <input type="email" id="emAddr" name="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" maxlength="120">
+      <label class="f" for="emPass">Password <small class="muted">(at least 6 characters)</small></label>
+      <div class="pwrow"><input type="password" id="emPass" name="password" autocomplete="${link ? 'new-password' : 'current-password'}" maxlength="128"><button type="button" class="btn small ghost" id="emShow" aria-pressed="false">Show</button></div>
+      <p class="flag" id="emErr" role="alert" hidden></p>
+      <p class="help" id="emInfo" role="status" hidden></p>
+      <div class="stack" style="margin-top:12px">${link ? '<button type="submit" class="btn primary" id="emLink" value="link">Save my list to this email</button>' : '<button type="submit" class="btn primary" id="emNew" value="new">Create my account</button><button type="submit" class="btn" id="emIn" value="in">Sign in</button>'}</div>
+    </form>
+    <div class="sheet-actions">${link ? '' : '<button type="button" class="linkbtn" id="emForgot">Forgot your password?</button>'}<button type="button" class="btn small ghost" id="emBack">Back</button></div>`, root => {
+      const q = sel => root.querySelector(sel);
+      const btns = [...root.querySelectorAll('#emNew,#emIn,#emLink')];
+      let switching = false;
+      const say = (t, ok) => { const a = q('#emErr'), b = q('#emInfo'); a.hidden = !t || ok; b.hidden = !t || !ok; (ok ? b : a).textContent = t || ''; };
+      const vals = () => [q('#emAddr').value.trim(), q('#emPass').value];
+      const run = async fn => {
+        say(''); btns.forEach(b => { b.disabled = true; });
+        try { await fn(); } catch (e){ say(emailErrText(e)); }
+        btns.forEach(b => { b.disabled = false; });
+      };
+      q('#emShow').addEventListener('click', e => {
+        const p = q('#emPass'), show = p.type === 'password';
+        p.type = show ? 'text' : 'password'; e.currentTarget.textContent = show ? 'Hide' : 'Show'; e.currentTarget.setAttribute('aria-pressed', String(show));
+      });
+      q('#emBack').addEventListener('click', () => { if (link) openSettings(); else { S.welcomeOpen = false; openWelcome(); } });
+      if (!link) q('#emForgot').addEventListener('click', () => {
+        const [em] = vals();
+        if (!em){ say('Type your email above first, then tap Forgot your password.'); q('#emAddr').focus(); return; }
+        run(async () => { await F.sendPasswordResetEmail(auth, em); say(`If there's an account for ${em}, a link to reset your password is on its way. Check your spam folder too.`, true); });
+      });
+      q('#emForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const act = (e.submitter && e.submitter.value) || (link ? 'link' : 'new');
+        const [em, pw] = vals();
+        if (!em){ say("That doesn't look like an email address."); q('#emAddr').focus(); return; }
+        if (!pw){ say('Type a password.'); q('#emPass').focus(); return; }
+        if (act === 'in') return run(() => F.signInWithEmailAndPassword(auth, em, pw));
+        if (act === 'new') return run(() => F.createUserWithEmailAndPassword(auth, em, pw));
+        if (switching) return run(async () => { await F.signInWithEmailAndPassword(auth, em, pw); closeSheet(); });
+        run(async () => {
+          try {
+            const res = await F.linkWithCredential(auth.currentUser, F.EmailAuthProvider.credential(em, pw));
+            S.authUser = { anon: false, google: false, name: '', email: (res && res.user && res.user.email) || em };
+            await loadAdmin();
+            closeSheet(); renderAll();
+            toast('Done. Sign in with this email on any phone to get your list.');
+          } catch (er){
+            if (er && (er.code === 'auth/email-already-in-use' || er.code === 'auth/credential-already-in-use')){
+              switching = true;
+              q('#emLink').textContent = 'Switch to that account';
+              say("That email already has its own list. Tap Switch to that account to use it instead (this phone's list stays where it is).");
+              return;
+            }
+            throw er;
+          }
+        });
+      });
+    });
 }
 async function googleSignIn(onError){
   const { F, auth } = S.fb;
@@ -4577,7 +4664,7 @@ async function linkGoogle(root){
   const msg = t => { const m = root.querySelector('#acctMsg'); if (m){ m.hidden = false; m.textContent = t; } };
   try {
     const res = await F.linkWithPopup(auth.currentUser, provider);
-    S.authUser = { anon: false, name: res.user.displayName || '', email: res.user.email || '' };
+    S.authUser = { anon: false, google: true, name: res.user.displayName || '', email: res.user.email || '' };
     await loadAdmin();
     closeSheet(); renderAll();
     toast('Done. Your list now follows your Google account.');
@@ -4617,7 +4704,7 @@ async function onAuth(user){
     return;
   }
   const changed = S.uid !== user.uid;
-  S.authUser = { anon: !!user.isAnonymous, name: user.displayName || '', email: user.email || '' };
+  S.authUser = { anon: !!user.isAnonymous, google: !user.isAnonymous && (user.providerData || []).some(p => p && p.providerId === 'google.com'), name: user.displayName || '', email: user.email || '' };
   S.myName = user.displayName || '';
   if (!changed){ renderAll(); return; }
   stopListeners();
