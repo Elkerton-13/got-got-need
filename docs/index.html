@@ -224,6 +224,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .sheet-card label.f{display:block;margin:12px 0 4px;font-weight:700;font-size:13px}
 .sheet-card input[type=text],.sheet-card textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:16px}
 .sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.sheet.page .sheet-card{height:100%;max-height:none;border-radius:0;padding-top:32px}
+@media (min-width:640px){.sheet.page .sheet-card{height:auto;max-height:90%;border-radius:14px}}
+.sheet.locked .closex{display:none}
+.details-lead{font-size:16px;margin:4px 0 6px}
 .closex{position:absolute;top:10px;right:10px;width:36px;height:36px;border:0;border-radius:50%;background:var(--paper);font-size:20px;line-height:1;cursor:pointer}
 .scanimg{display:block;max-width:100%;max-height:220px;margin:10px 0;border-radius:8px}
 .scanlist{list-style:none;margin:10px 0 0;padding:0}
@@ -2037,8 +2041,11 @@ function renderAll(){
 
 /* ===================== Sheet + toast ===================== */
 let lastFocus = null;
-function openSheet(html, onMount){
+function openSheet(html, onMount, opts){
+  opts = opts || {};
   S.sheetAt = Date.now();
+  S.sheetLocked = !!opts.locked;
+  $('#sheet').className = 'sheet' + (opts.page ? ' page' : '') + (opts.locked ? ' locked' : '');
   lastFocus = document.activeElement;
   $('#sheetBody').innerHTML = html;
   $('#sheet').hidden = false;
@@ -2048,15 +2055,17 @@ function openSheet(html, onMount){
 }
 function closeSheet(){
   $('#sheet').hidden = true; $('#sheetBody').innerHTML = '';
-  S.welcomeOpen = false; S.editing = null;
+  $('#sheet').className = 'sheet';
+  S.welcomeOpen = false; S.editing = null; S.sheetLocked = false; S.onboardOpen = false;
   if (lastFocus && lastFocus.focus) try { lastFocus.focus({ preventScroll: true }); } catch {}
 }
 $('#sheet').addEventListener('click', e => {
   const c = e.target.closest('[data-close]'); if (!c) return;
+  if (S.sheetLocked) return;
   if (c.classList.contains('scrim') && Date.now() - (S.sheetAt || 0) < 400) return;
   closeSheet();
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden && !S.sheetLocked) closeSheet(); });
 let toastTimer = null;
 function toast(msg, withUndo){
   $('#toastMsg').textContent = msg;
@@ -2074,15 +2083,17 @@ function openJoin(){
   if (S.onboardOpen) return;
   const suggested = (S.myName || '').trim().split(/\s+/)[0] || '';
   S.onboardOpen = true;
-  openSheet(`<h2 id="sheetTitle">Join the swap group</h2>
-    <p>Who's collecting? You can change this later in Settings.</p>
+  const canSignOut = isWeb() && S.authUser && !S.authUser.anon;
+  openSheet(`<h2 id="sheetTitle">Your details</h2>
+    <p class="details-lead">Tell your friends who's collecting. You can change this any time in Settings.</p>
     <label class="f" for="joinAdult">Adult name</label>
-    <input type="text" id="joinAdult" maxlength="24" value="${esc(suggested)}" autocomplete="given-name">
+    <input type="text" id="joinAdult" maxlength="24" value="${esc(suggested)}" autocomplete="given-name" placeholder="e.g. Danny">
     <label class="f" for="joinChild">Child name <small class="muted">(leave blank if the cards are yours)</small></label>
-    <input type="text" id="joinChild" maxlength="24" autocomplete="off">
+    <input type="text" id="joinChild" maxlength="24" autocomplete="off" placeholder="e.g. Arthur">
     <p class="help" id="joinPreview"></p>
     <p class="flag" id="joinErr" hidden></p>
-    <div class="sheet-actions"><button type="button" class="btn primary" id="joinGo">Join</button></div>`, root => {
+    <div class="sheet-actions"><button type="button" class="btn primary" id="joinGo">Save and start</button></div>
+    ${canSignOut ? `<p class="help" style="margin-top:18px">Signed in as ${esc(S.authUser.email || S.authUser.name || 'your Google account')}. <button type="button" class="linkbtn" id="joinSignOut">Not you? Sign out</button></p>` : ''}`, root => {
       const preview = () => {
         const a = cleanName(root.querySelector('#joinAdult').value), c = cleanName(root.querySelector('#joinChild').value);
         root.querySelector('#joinPreview').textContent = a ? `Friends will see: ${c ? `${c} (${a})` : a}` : '';
@@ -2090,30 +2101,34 @@ function openJoin(){
       root.querySelector('#joinAdult').addEventListener('input', preview);
       root.querySelector('#joinChild').addEventListener('input', preview);
       preview();
+      const so = root.querySelector('#joinSignOut');
+      if (so) so.addEventListener('click', () => { S.sheetLocked = false; S.fb.F.signOut(S.fb.auth).catch(() => toast("Couldn't sign out")); });
       const go = async () => {
         const adult = cleanName(root.querySelector('#joinAdult').value);
         const child = cleanName(root.querySelector('#joinChild').value);
-        if (!adult){ root.querySelector('#joinAdult').focus(); return; }
+        if (!adult){ root.querySelector('#joinAdult').focus(); const er = root.querySelector('#joinErr'); er.hidden = false; er.textContent = 'Add the adult name first.'; return; }
         root.querySelector('#joinGo').disabled = true;
         S.local[S.uid] = newDoc(S.uid, adult, child);
         S.dirty.add(S.uid);
         S.activeId = S.uid;
         const ok = await flush(S.uid);
-        if (ok){ closeSheet(); renderAll(); toast("You're in. Start adding cards."); }
-        else {
+        if (ok){
+          closeSheet();
+          S.tab = 'cards'; store.set('tab', 'cards');
+          renderAll(); window.scrollTo(0, 0);
+          toast("You're in. Start adding cards.");
+        } else {
           delete S.local[S.uid];
           const err = root.querySelector('#joinErr');
           err.hidden = false;
-          err.textContent = S.readOnly ? "You can see the swap list but can't join it. Ask whoever shared this page to invite you with Can edit access." : "Couldn't join just now. Check your connection and try again.";
+          err.textContent = S.readOnly ? (isWeb() ? "The database didn't accept your details. Check the Firestore rules are published." : "You can see the swap list but can't join it. Ask whoever shared this page to invite you with Can edit access.") : "Couldn't save just now. Check your connection and try again.";
           root.querySelector('#joinGo').disabled = false;
           renderAll();
         }
       };
       root.querySelector('#joinGo').addEventListener('click', go);
       root.querySelectorAll('#joinAdult,#joinChild').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }));
-    });
-  const obs = new MutationObserver(() => { if ($('#sheet').hidden){ S.onboardOpen = false; obs.disconnect(); } });
-  obs.observe($('#sheet'), { attributes: true, attributeFilter: ['hidden'] });
+    }, { page: true, locked: true });
 }
 function copiesLabel(n){ return n === 0 ? "You need this card" : n === 1 ? 'Got it, no swaps' : `Got it + ${plural(n - 1, 'swap')}`; }
 function openCardEditor(id){
@@ -2649,7 +2664,7 @@ function makeDbShim(F, fs){
   return {
     collection(path){
       return { onSnapshot(next, error){
-        return F.onSnapshot(F.collection(fs, path),
+        return F.onSnapshot(F.collection(fs, path), { includeMetadataChanges: true },
           snap => next({ docs: snap.docs.map(wrap), size: snap.size, empty: snap.empty, metadata: snap.metadata }),
           e => error && error(fbErr(e)));
       } };
