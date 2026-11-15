@@ -4,6 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Got Got Need</title>
+<meta name="description" content="Swap Topps Premier League 2026/27 cards with your mates. Add your swaps, see who to swap with, agree swaps.">
+<meta name="theme-color" content="#EDF0F6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0A1020" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Got Got Need">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Got Got Need">
+<meta property="og:title" content="Got Got Need">
+<meta property="og:description" content="Swap Topps Premier League 2026/27 cards with your mates. Add your swaps, see who to swap with, agree swaps.">
+<meta property="og:url" content="https://elkerton-13.github.io/got-got-need/">
+<meta property="og:image" content="https://elkerton-13.github.io/got-got-need/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Got Got Need logo: two swap cards with arrows">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 :root{
   /* Matchday-programme utility app: cobalt = got, gold = swap, cool card-stock neutrals.
@@ -53,7 +70,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .stick{position:sticky;top:0;z-index:10;background:var(--paper);padding-top:12px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
-.logo{flex:none;display:grid;place-items:center;width:38px;height:48px;border-radius:5px;background:var(--accent);color:var(--accent-ink);font:800 12px/1 var(--display);letter-spacing:.05em;transform:rotate(-5deg);box-shadow:3px 3px 0 var(--gold)}
+.logo{flex:none;display:block;width:46px;height:46px;border-radius:11px;box-shadow:0 2px 6px rgba(15,27,52,.25)}
 h1{margin:0;font:800 23px/1 var(--display);text-transform:uppercase;letter-spacing:.01em}
 h2{margin:0;font:800 18px/1.15 var(--display);text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
 h3{margin:0;font:800 19px/1.15 var(--display);text-wrap:balance}
@@ -291,7 +308,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   <div class="stick">
     <header class="top">
       <div class="brand">
-        <div class="logo" aria-hidden="true">GGN</div>
+        <img class="logo" src="icons/icon-192.png" alt="" width="46" height="46">
         <div>
           <h1>Got Got Need</h1>
           <p class="sub">Topps Premier League 2026/27 card swaps</p>
